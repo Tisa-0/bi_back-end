@@ -349,7 +349,7 @@ public class SysMenuServiceImpl implements SysMenuService {
     @Transactional
     public boolean saveProductCustomMenu(SysMenu menu, List<Long> tenantIds) {
         // 1. 创建全局菜单记录
-        menu.setModuleCode(PRODUCT_CUSTOM_MODULE_CODE);
+        // 保留前端传入的 moduleCode，不强制覆盖
         // 如果 parentId 是顶级菜单，设置为 0
         if (menu.getParentId() == null || menu.getParentId() == 0) {
             menu.setParentId(0L);

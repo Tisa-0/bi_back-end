@@ -1,32 +1,40 @@
 package com.rightmanage.service.flow;
 
-import com.rightmanage.entity.FlowDefinition;
-import com.rightmanage.entity.FlowDefinitionDTO;
-import com.rightmanage.entity.FlowDefinitionDetailDTO;
+import com.rightmanage.entity.flow.FlowDefinition;
+import com.rightmanage.entity.flow.FlowDefinitionDetailDTO;
 import java.util.List;
 
+/**
+ * 流程定义服务接口
+ */
 public interface FlowDefinitionService {
-    // 流程定义CRUD
-    List<FlowDefinition> list();
-    
-    FlowDefinition getById(Long id);
-    
-    FlowDefinitionDetailDTO getDetailById(Long id);
-    
-    void save(FlowDefinitionDTO dto);
-    
-    void saveDetail(FlowDefinitionDetailDTO dto);
-    
-    void update(FlowDefinitionDTO dto);
-    
-    void updateDetail(FlowDefinitionDetailDTO dto);
-    
-    void delete(Long id);
-    
-    void publish(Long id);
-    
-    void disable(Long id);
-    
-    // 获取当前用户可发起的流程列表
+    /**
+     * 保存流程定义（含节点配置）
+     */
+    void saveFlowDefinition(FlowDefinitionDetailDTO dto, Long userId);
+
+    /**
+     * 更新流程定义
+     */
+    void updateFlowDefinition(FlowDefinitionDetailDTO dto);
+
+    /**
+     * 获取流程定义列表
+     */
+    List<FlowDefinition> listFlowDefinition();
+
+    /**
+     * 获取流程定义详情
+     */
+    FlowDefinitionDetailDTO getFlowDefinitionDetail(Long id);
+
+    /**
+     * 删除流程定义
+     */
+    void deleteFlowDefinition(Long id);
+
+    /**
+     * 获取当前用户可发起的流程列表
+     */
     List<FlowDefinition> getStartableFlows(Long userId);
 }

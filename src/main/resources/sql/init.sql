@@ -74,10 +74,12 @@ CREATE TABLE IF NOT EXISTS sys_role_menu (
     role_id BIGINT NOT NULL COMMENT '角色ID',
     menu_id BIGINT NOT NULL COMMENT '菜单ID',
     module_code VARCHAR(50) COMMENT '模块代码(ABC)',
+    tenant_id BIGINT(20) DEFAULT NULL COMMENT '关联租户ID（仅模块C租户角色有值）',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     INDEX idx_role_id (role_id),
     INDEX idx_menu_id (menu_id),
-    INDEX idx_module_code (module_code)
+    INDEX idx_module_code (module_code),
+    INDEX idx_tenant_id (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色菜单关联表';
 
 -- 角色接口关联表
@@ -388,34 +390,18 @@ CREATE TABLE IF NOT EXISTS sys_tenant (
     UNIQUE KEY uk_tenant_code (tenant_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模块C租户表';
 
--- 为sys_role表新增租户关联字段
-ALTER TABLE sys_role ADD COLUMN IF NOT EXISTS tenant_id BIGINT(20) DEFAULT NULL COMMENT '关联租户ID（仅模块C角色有值）';
-ALTER TABLE sys_role ADD KEY IF NOT EXISTS idx_module_tenant (module_code, tenant_id);
-
 -- 初始化模块C租户数据
 INSERT INTO sys_tenant (tenant_name, tenant_code, module_code, status) VALUES
 ('租户1', 'TENANT_001', 'C', 1),
 ('租户2', 'TENANT_002', 'C', 1),
 ('租户3', 'TENANT_003', 'C', 1);
 
--- 为模块C创建带租户的角色（每个租户3个角色）
--- 租户1的角色
-INSERT INTO sys_role (role_name, role_code, description, module_code, tenant_id) VALUES
-('租户1管理员', 'TENANT1_ADMIN', '租户1超级管理员', 'C', 1),
-('租户1操作员', 'TENANT1_OPERATOR', '租户1操作人员', 'C', 1),
-('租户1查看员', 'TENANT1_VIEWER', '租户1只读人员', 'C', 1);
-
--- 租户2的角色
-INSERT INTO sys_role (role_name, role_code, description, module_code, tenant_id) VALUES
-('租户2管理员', 'TENANT2_ADMIN', '租户2超级管理员', 'C', 2),
-('租户2操作员', 'TENANT2_OPERATOR', '租户2操作人员', 'C', 2),
-('租户2查看员', 'TENANT2_VIEWER', '租户2只读人员', 'C', 2);
-
--- 租户3的角色
-INSERT INTO sys_role (role_name, role_code, description, module_code, tenant_id) VALUES
-('租户3管理员', 'TENANT3_ADMIN', '租户3超级管理员', 'C', 3),
-('租户3操作员', 'TENANT3_OPERATOR', '租户3操作人员', 'C', 3),
-('租户3查看员', 'TENANT3_VIEWER', '租户3只读人员', 'C', 3);
+-- 为模块C创建共用角色（所有租户共用同一套角色配置）
+-- 注意：角色本身不保存tenant_id，tenant_id保存在sys_role_menu和sys_user_role中
+INSERT INTO sys_role (role_name, role_code, description, module_code) VALUES
+('租户管理员', 'TENANT_ADMIN', '租户超级管理员', 'C'),
+('租户操作员', 'TENANT_OPERATOR', '租户操作人员', 'C'),
+('租户查看员', 'TENANT_VIEWER', '租户只读人员', 'C');
 
 -- 为sys_user_role表新增模块和租户字段
 ALTER TABLE sys_user_role ADD COLUMN IF NOT EXISTS module_code VARCHAR(10) COMMENT '所属模块编码';

@@ -38,13 +38,8 @@ public class SysRoleServiceImpl implements SysRoleService {
         if (moduleCode != null && !moduleCode.isEmpty()) {
             wrapper.eq(SysRole::getModuleCode, moduleCode);
         }
-        // 模块C需要按租户筛选
-        if (tenantId != null) {
-            wrapper.eq(SysRole::getTenantId, tenantId);
-        } else if (moduleCode != null && !moduleCode.equals("C")) {
-            // 非模块C，tenantId必须为空
-            wrapper.isNull(SysRole::getTenantId);
-        }
+        // 模块C：所有租户共用同一套角色，不需要按tenantId筛选角色本身
+        // 角色列表不区分租户，但绑定菜单和成员时需要区分租户
         wrapper.orderByDesc(SysRole::getCreateTime);
         IPage<SysRole> result = sysRoleMapper.selectPage(page, wrapper);
         return result;
@@ -56,19 +51,16 @@ public class SysRoleServiceImpl implements SysRoleService {
         if (moduleCode != null && !moduleCode.isEmpty()) {
             wrapper.eq(SysRole::getModuleCode, moduleCode);
         }
-        wrapper.isNull(SysRole::getTenantId);
         wrapper.orderByDesc(SysRole::getCreateTime);
         return sysRoleMapper.selectList(wrapper);
     }
 
     @Override
     public List<SysRole> listByModuleCodeAndTenantId(String moduleCode, Long tenantId) {
+        // 模块C：所有租户共用同一套角色，直接返回角色列表
         LambdaQueryWrapper<SysRole> wrapper = new LambdaQueryWrapper<>();
         if (moduleCode != null && !moduleCode.isEmpty()) {
             wrapper.eq(SysRole::getModuleCode, moduleCode);
-        }
-        if (tenantId != null) {
-            wrapper.eq(SysRole::getTenantId, tenantId);
         }
         wrapper.orderByDesc(SysRole::getCreateTime);
         return sysRoleMapper.selectList(wrapper);
@@ -103,11 +95,15 @@ public class SysRoleServiceImpl implements SysRoleService {
     }
 
     @Override
-    public List<Long> getMenuIdsByRoleId(Long roleId, String moduleCode) {
+    public List<Long> getMenuIdsByRoleId(Long roleId, String moduleCode, Long tenantId) {
         LambdaQueryWrapper<SysRoleMenu> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysRoleMenu::getRoleId, roleId);
         if (moduleCode != null && !moduleCode.isEmpty()) {
             wrapper.eq(SysRoleMenu::getModuleCode, moduleCode);
+        }
+        // 模块C需要按租户筛选
+        if ("C".equals(moduleCode) && tenantId != null) {
+            wrapper.eq(SysRoleMenu::getTenantId, tenantId);
         }
         List<SysRoleMenu> roleMenus = sysRoleMenuMapper.selectList(wrapper);
         return roleMenus.stream().map(SysRoleMenu::getMenuId).collect(Collectors.toList());
@@ -115,12 +111,16 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     @Transactional
-    public boolean bindMenus(Long roleId, List<Long> menuIds, String moduleCode) {
-        // 删除原有菜单
+    public boolean bindMenus(Long roleId, List<Long> menuIds, String moduleCode, Long tenantId) {
+        // 删除原有菜单（模块C需要区分租户）
         LambdaQueryWrapper<SysRoleMenu> deleteWrapper = new LambdaQueryWrapper<>();
         deleteWrapper.eq(SysRoleMenu::getRoleId, roleId);
         if (moduleCode != null && !moduleCode.isEmpty()) {
             deleteWrapper.eq(SysRoleMenu::getModuleCode, moduleCode);
+        }
+        // 模块C需要按租户删除
+        if ("C".equals(moduleCode) && tenantId != null) {
+            deleteWrapper.eq(SysRoleMenu::getTenantId, tenantId);
         }
         sysRoleMenuMapper.delete(deleteWrapper);
         // 添加新菜单
@@ -130,6 +130,10 @@ public class SysRoleServiceImpl implements SysRoleService {
                 roleMenu.setRoleId(roleId);
                 roleMenu.setMenuId(menuId);
                 roleMenu.setModuleCode(moduleCode);
+                // 模块C需要设置租户ID
+                if ("C".equals(moduleCode)) {
+                    roleMenu.setTenantId(tenantId);
+                }
                 sysRoleMenuMapper.insert(roleMenu);
             }
         }
@@ -171,19 +175,26 @@ public class SysRoleServiceImpl implements SysRoleService {
     }
 
     @Override
-    public List<Long> getUserIdsByRoleId(Long roleId) {
+    public List<Long> getUserIdsByRoleId(Long roleId, String moduleCode, Long tenantId) {
         LambdaQueryWrapper<SysUserRole> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserRole::getRoleId, roleId);
+        // 模块C需要按租户筛选
+        if ("C".equals(moduleCode) && tenantId != null) {
+            wrapper.eq(SysUserRole::getTenantId, tenantId);
+        }
         List<SysUserRole> userRoles = sysUserRoleMapper.selectList(wrapper);
         return userRoles.stream().map(SysUserRole::getUserId).collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public boolean bindUsers(Long roleId, List<Long> userIds) {
-        // 删除原有用户
+    public boolean bindUsers(Long roleId, List<Long> userIds, String moduleCode, Long tenantId) {
+        // 删除原有用户（模块C需要区分租户）
         LambdaQueryWrapper<SysUserRole> deleteWrapper = new LambdaQueryWrapper<>();
         deleteWrapper.eq(SysUserRole::getRoleId, roleId);
+        if ("C".equals(moduleCode) && tenantId != null) {
+            deleteWrapper.eq(SysUserRole::getTenantId, tenantId);
+        }
         sysUserRoleMapper.delete(deleteWrapper);
         // 添加新用户
         if (userIds != null && !userIds.isEmpty()) {
@@ -191,6 +202,11 @@ public class SysRoleServiceImpl implements SysRoleService {
                 SysUserRole userRole = new SysUserRole();
                 userRole.setUserId(userId);
                 userRole.setRoleId(roleId);
+                userRole.setModuleCode(moduleCode);
+                // 模块C需要设置租户ID
+                if ("C".equals(moduleCode)) {
+                    userRole.setTenantId(tenantId);
+                }
                 sysUserRoleMapper.insert(userRole);
             }
         }
@@ -200,9 +216,9 @@ public class SysRoleServiceImpl implements SysRoleService {
     // ============ 角色成员维护相关方法 ============
 
     @Override
-    public List<SysUser> getRoleUsers(Long roleId) {
-        // 获取角色已绑定的所有用户ID
-        List<Long> userIds = getUserIdsByRoleId(roleId);
+    public List<SysUser> getRoleUsers(Long roleId, String moduleCode, Long tenantId) {
+        // 获取角色已绑定的所有用户ID（模块C需要区分租户）
+        List<Long> userIds = getUserIdsByRoleId(roleId, moduleCode, tenantId);
         if (userIds == null || userIds.isEmpty()) {
             return new ArrayList<>();
         }
@@ -211,9 +227,9 @@ public class SysRoleServiceImpl implements SysRoleService {
     }
 
     @Override
-    public List<SysUser> getOptionalUsers(Long roleId, String keyword, Integer status, Integer pageNum, Integer pageSize) {
-        // 获取角色已绑定的用户ID
-        Set<Long> boundUserIds = new HashSet<>(getUserIdsByRoleId(roleId));
+    public List<SysUser> getOptionalUsers(Long roleId, String keyword, Integer status, Integer pageNum, Integer pageSize, Long tenantId) {
+        // 获取角色已绑定的用户ID（模块C需要区分租户）
+        Set<Long> boundUserIds = new HashSet<>(getUserIdsByRoleId(roleId, "C", tenantId));
 
         // 构建查询条件
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
@@ -231,13 +247,13 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     @Transactional
-    public BindResultVO bindUsersBatch(Long roleId, List<Long> userIds, String moduleCode) {
+    public BindResultVO bindUsersBatch(Long roleId, List<Long> userIds, String moduleCode, Long tenantId) {
         if (userIds == null || userIds.isEmpty()) {
             return BindResultVO.success(0, "未选择用户");
         }
 
-        // 获取已绑定的用户ID
-        Set<Long> boundUserIds = new HashSet<>(getUserIdsByRoleId(roleId));
+        // 获取已绑定的用户ID（模块C需要区分租户）
+        Set<Long> boundUserIds = new HashSet<>(getUserIdsByRoleId(roleId, moduleCode, tenantId));
 
         List<Long> failUserIds = new ArrayList<>();
         int successCount = 0;
@@ -252,6 +268,10 @@ public class SysRoleServiceImpl implements SysRoleService {
             SysUserRole userRole = new SysUserRole();
             userRole.setUserId(userId);
             userRole.setRoleId(roleId);
+            userRole.setModuleCode(moduleCode);
+            if ("C".equals(moduleCode)) {
+                userRole.setTenantId(tenantId);
+            }
             sysUserRoleMapper.insert(userRole);
             boundUserIds.add(userId); // 添加到已绑定集合，避免重复插入
             successCount++;
@@ -267,13 +287,13 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     @Transactional
-    public BindResultVO unbindUsers(Long roleId, List<Long> userIds) {
+    public BindResultVO unbindUsers(Long roleId, List<Long> userIds, String moduleCode, Long tenantId) {
         if (userIds == null || userIds.isEmpty()) {
             return BindResultVO.success(0, "未选择用户");
         }
 
-        // 获取该角色所有用户
-        List<Long> allUserIds = getUserIdsByRoleId(roleId);
+        // 获取该角色所有用户（模块C需要区分租户）
+        List<Long> allUserIds = getUserIdsByRoleId(roleId, moduleCode, tenantId);
         Set<Long> allUserIdSet = new HashSet<>(allUserIds);
 
         List<Long> failUserIds = new ArrayList<>();
@@ -286,10 +306,13 @@ public class SysRoleServiceImpl implements SysRoleService {
                 continue;
             }
 
-            // 删除用户角色关联
+            // 删除用户角色关联（模块C需要区分租户）
             LambdaQueryWrapper<SysUserRole> deleteWrapper = new LambdaQueryWrapper<>();
             deleteWrapper.eq(SysUserRole::getRoleId, roleId);
             deleteWrapper.eq(SysUserRole::getUserId, userId);
+            if ("C".equals(moduleCode) && tenantId != null) {
+                deleteWrapper.eq(SysUserRole::getTenantId, tenantId);
+            }
             sysUserRoleMapper.delete(deleteWrapper);
             successCount++;
         }
@@ -304,9 +327,12 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     @Transactional
-    public boolean clearRoleUsers(Long roleId) {
+    public boolean clearRoleUsers(Long roleId, String moduleCode, Long tenantId) {
         LambdaQueryWrapper<SysUserRole> deleteWrapper = new LambdaQueryWrapper<>();
         deleteWrapper.eq(SysUserRole::getRoleId, roleId);
+        if ("C".equals(moduleCode) && tenantId != null) {
+            deleteWrapper.eq(SysUserRole::getTenantId, tenantId);
+        }
         sysUserRoleMapper.delete(deleteWrapper);
         return true;
     }

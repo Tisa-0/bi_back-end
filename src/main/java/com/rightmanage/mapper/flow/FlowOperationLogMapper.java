@@ -1,9 +1,9 @@
 package com.rightmanage.mapper.flow;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.rightmanage.entity.flow.FlowInstance;
+import com.rightmanage.entity.flow.FlowOperationLog;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
-public interface FlowInstanceMapper extends BaseMapper<FlowInstance> {
+public interface FlowOperationLogMapper extends BaseMapper<FlowOperationLog> {
 }

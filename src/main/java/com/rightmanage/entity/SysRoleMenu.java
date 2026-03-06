@@ -18,6 +18,8 @@ public class SysRoleMenu implements Serializable {
 
     private String moduleCode;
 
+    private Long tenantId;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 }

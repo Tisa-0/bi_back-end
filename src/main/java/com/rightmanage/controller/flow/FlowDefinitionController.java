@@ -1,8 +1,8 @@
 package com.rightmanage.controller.flow;
 
 import com.rightmanage.common.Result;
-import com.rightmanage.entity.FlowDefinitionDetailDTO;
-import com.rightmanage.entity.FlowDefinition;
+import com.rightmanage.entity.flow.FlowDefinitionDetailDTO;
+import com.rightmanage.entity.flow.FlowDefinition;
 import com.rightmanage.service.flow.FlowDefinitionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -24,7 +24,7 @@ public class FlowDefinitionController {
      */
     @GetMapping("/list")
     public Result<List<FlowDefinition>> list() {
-        return Result.success(flowDefinitionService.list());
+        return Result.success(flowDefinitionService.listFlowDefinition());
     }
 
     /**
@@ -32,7 +32,7 @@ public class FlowDefinitionController {
      */
     @GetMapping("/{id}")
     public Result<FlowDefinitionDetailDTO> getById(@PathVariable Long id) {
-        FlowDefinitionDetailDTO detail = flowDefinitionService.getDetailById(id);
+        FlowDefinitionDetailDTO detail = flowDefinitionService.getFlowDefinitionDetail(id);
         return Result.success(detail);
     }
 
@@ -47,18 +47,18 @@ public class FlowDefinitionController {
     /**
      * 保存流程定义（新建或更新）
      */
-    @PostMapping
-    public Result<?> save(@RequestBody FlowDefinitionDetailDTO dto) {
-        flowDefinitionService.saveDetail(dto);
+    @PostMapping("/save")
+    public Result<?> save(@RequestBody FlowDefinitionDetailDTO dto, @RequestParam Long userId) {
+        flowDefinitionService.saveFlowDefinition(dto, userId);
         return Result.success();
     }
 
     /**
      * 更新流程定义
      */
-    @PutMapping
+    @PutMapping("/update")
     public Result<?> update(@RequestBody FlowDefinitionDetailDTO dto) {
-        flowDefinitionService.updateDetail(dto);
+        flowDefinitionService.updateFlowDefinition(dto);
         return Result.success();
     }
 
@@ -67,25 +67,7 @@ public class FlowDefinitionController {
      */
     @DeleteMapping("/{id}")
     public Result<?> delete(@PathVariable Long id) {
-        flowDefinitionService.delete(id);
-        return Result.success();
-    }
-
-    /**
-     * 发布流程定义
-     */
-    @PostMapping("/publish/{id}")
-    public Result<?> publish(@PathVariable Long id) {
-        flowDefinitionService.publish(id);
-        return Result.success();
-    }
-
-    /**
-     * 禁用流程定义
-     */
-    @PostMapping("/disable/{id}")
-    public Result<?> disable(@PathVariable Long id) {
-        flowDefinitionService.disable(id);
+        flowDefinitionService.deleteFlowDefinition(id);
         return Result.success();
     }
 }

@@ -1,7 +1,7 @@
 package com.rightmanage.mapper.flow;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.rightmanage.entity.FlowTask;
+import com.rightmanage.entity.flow.FlowTask;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper

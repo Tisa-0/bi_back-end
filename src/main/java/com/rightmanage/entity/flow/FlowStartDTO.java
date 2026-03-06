@@ -1,16 +1,12 @@
-package com.rightmanage.entity;
+package com.rightmanage.entity.flow;
 
 import lombok.Data;
-import java.io.Serializable;
 
 /**
- * 发起流程DTO
+ * 流程发起DTO
  */
 @Data
-public class FlowStartDTO implements Serializable {
-    private static final long serialVersionUID = 1L;
-
-    private Long flowDefinitionId;
+public class FlowStartDTO {
+    private Long flowId;
     private String instanceName;
-    private String variables;
 }

@@ -1,9 +1,10 @@
 package com.rightmanage.controller.flow;
 
 import com.rightmanage.common.Result;
-import com.rightmanage.entity.FlowInstance;
-import com.rightmanage.entity.FlowInstanceDTO;
-import com.rightmanage.entity.FlowStartDTO;
+import com.rightmanage.entity.flow.FlowInstance;
+import com.rightmanage.entity.flow.FlowStartDTO;
+import com.rightmanage.entity.flow.FlowDetailVO;
+import com.rightmanage.entity.flow.FlowInstanceVO;
 import com.rightmanage.service.flow.FlowInstanceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -31,17 +32,17 @@ public class FlowInstanceController {
     /**
      * 获取我的流程实例
      */
-    @GetMapping("/my")
-    public Result<List<FlowInstance>> getMyInstances(@RequestParam Long userId) {
-        return Result.success(flowInstanceService.getMyInstances(userId));
+    @GetMapping("/myInitiated")
+    public Result<List<FlowInstanceVO>> getMyInstances(@RequestParam Long userId) {
+        return Result.success(flowInstanceService.myInitiated(userId));
     }
 
     /**
      * 获取流程实例详情
      */
-    @GetMapping("/{id}")
-    public Result<FlowInstanceDTO> getById(@PathVariable Long id) {
-        return Result.success(flowInstanceService.getDetail(id));
+    @GetMapping("/detail")
+    public Result<FlowDetailVO> getById(@RequestParam Long instanceId) {
+        return Result.success(flowInstanceService.getFlowDetail(instanceId));
     }
 
     /**
@@ -49,16 +50,25 @@ public class FlowInstanceController {
      */
     @PostMapping("/start")
     public Result<Long> start(@RequestBody FlowStartDTO dto, @RequestParam Long userId) {
-        Long instanceId = flowInstanceService.start(dto, userId);
+        Long instanceId = flowInstanceService.startFlow(dto, userId);
         return Result.success(instanceId);
     }
 
     /**
      * 撤回流程
      */
-    @PostMapping("/cancel/{id}")
-    public Result<?> cancel(@PathVariable Long id, @RequestParam Long userId) {
-        flowInstanceService.cancel(id, userId);
+    @PostMapping("/cancel")
+    public Result<?> cancel(@RequestParam Long instanceId, @RequestParam Long userId) {
+        flowInstanceService.cancelFlow(instanceId, userId);
+        return Result.success();
+    }
+
+    /**
+     * 终止流程
+     */
+    @PostMapping("/terminate")
+    public Result<?> terminate(@RequestParam Long instanceId, @RequestParam Long userId) {
+        flowInstanceService.terminateFlow(instanceId, userId);
         return Result.success();
     }
 }

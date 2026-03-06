@@ -25,25 +25,25 @@ public interface SysRoleService {
 
     List<SysRole> listByIds(List<Long> ids);
 
-    List<Long> getMenuIdsByRoleId(Long roleId, String moduleCode);
+    List<Long> getMenuIdsByRoleId(Long roleId, String moduleCode, Long tenantId);
 
-    boolean bindMenus(Long roleId, List<Long> menuIds, String moduleCode);
+    boolean bindMenus(Long roleId, List<Long> menuIds, String moduleCode, Long tenantId);
 
     List<Long> getApiIdsByRoleId(Long roleId, String moduleCode);
 
     boolean bindApis(Long roleId, List<Long> apiIds, String moduleCode);
 
-    List<Long> getUserIdsByRoleId(Long roleId);
+    List<Long> getUserIdsByRoleId(Long roleId, String moduleCode, Long tenantId);
 
-    boolean bindUsers(Long roleId, List<Long> userIds);
+    boolean bindUsers(Long roleId, List<Long> userIds, String moduleCode, Long tenantId);
 
-    List<SysUser> getRoleUsers(Long roleId);
+    List<SysUser> getRoleUsers(Long roleId, String moduleCode, Long tenantId);
 
-    List<SysUser> getOptionalUsers(Long roleId, String keyword, Integer status, Integer pageNum, Integer pageSize);
+    List<SysUser> getOptionalUsers(Long roleId, String keyword, Integer status, Integer pageNum, Integer pageSize, Long tenantId);
 
-    BindResultVO bindUsersBatch(Long roleId, List<Long> userIds, String moduleCode);
+    BindResultVO bindUsersBatch(Long roleId, List<Long> userIds, String moduleCode, Long tenantId);
 
-    BindResultVO unbindUsers(Long roleId, List<Long> userIds);
+    BindResultVO unbindUsers(Long roleId, List<Long> userIds, String moduleCode, Long tenantId);
 
-    boolean clearRoleUsers(Long roleId);
+    boolean clearRoleUsers(Long roleId, String moduleCode, Long tenantId);
 }

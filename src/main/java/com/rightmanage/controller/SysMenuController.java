@@ -160,6 +160,8 @@ public class SysMenuController {
     @PostMapping("/save-product-custom")
     public Result<?> saveProductCustomMenu(@RequestBody SysMenu menu, @RequestParam List<Long> tenantIds) {
         try {
+            System.out.println("saveProductCustomMenu 接收到的 menu: " + menu);
+            System.out.println("moduleCode: " + menu.getModuleCode());
             sysMenuService.saveProductCustomMenu(menu, tenantIds);
             return Result.success();
         } catch (Exception e) {

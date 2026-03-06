@@ -1,17 +1,14 @@
-package com.rightmanage.entity;
+package com.rightmanage.entity.flow;
 
 import lombok.Data;
-import java.io.Serializable;
 
 /**
- * 审批任务DTO
+ * 流程审批DTO
  */
 @Data
-public class FlowApproveDTO implements Serializable {
-    private static final long serialVersionUID = 1L;
-
+public class FlowApproveDTO {
     private Long taskId;
-    private String action; // APPROVE批准/REJECT拒绝/DELEGATE转办
+    private String action;
     private String comment;
-    private Long delegateUserId; // 转办时指定的用户ID
+    private Long userId;
 }
