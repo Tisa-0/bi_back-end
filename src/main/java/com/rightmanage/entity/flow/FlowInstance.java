@@ -22,6 +22,8 @@ public class FlowInstance implements Serializable {
 
     private Long applicantId;
 
+    private Long tenantId; // 租户ID（产品智能定制模块需要）
+
     private String currentNodeKey;
 
     private String currentNodeName;
@@ -36,4 +38,11 @@ public class FlowInstance implements Serializable {
 
     @TableLogic
     private Integer deleted;
+
+    // 凭证信息
+    private String attachmentUrl; // 凭证文件URL
+    private String attachmentName; // 凭证文件名
+
+    // 额外信息
+    private String extraInfo; // 额外信息（如灰度发布链接等）
 }

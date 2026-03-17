@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS `flow_instance` (
   `flow_id` bigint(20) NOT NULL COMMENT '关联流程定义ID',
   `instance_name` varchar(100) NOT NULL COMMENT '实例名称（如：张三-3天请假）',
   `applicant_id` bigint(20) NOT NULL COMMENT '申请人ID（sys_user.id）',
+  `tenant_id` bigint(20) DEFAULT NULL COMMENT '租户ID（产品智能定制模块需要）',
   `current_node_key` varchar(50) DEFAULT '' COMMENT '当前节点标识',
   `current_node_name` varchar(50) DEFAULT '' COMMENT '当前节点名称',
   `status` tinyint(4) DEFAULT 0 COMMENT '状态（0运行中1已完成2已驳回3已撤销4已终止）',
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS `flow_node_config` (
   `node_type` varchar(20) NOT NULL COMMENT '节点类型（start/approve/notify/end）',
   `handler_type` varchar(20) DEFAULT '' COMMENT '处理人类型（role/user/role_user，仅approve/notify节点）',
   `handler_ids` varchar(500) DEFAULT '' COMMENT '处理人ID（role.id或user.id，逗号分隔）',
+  `module_code` varchar(20) DEFAULT '' COMMENT '模块编码（产品智能定制模块为C）',
   `notify_content` text DEFAULT '' COMMENT '通知内容（仅notify节点）',
   `sort` int(11) DEFAULT 0 COMMENT '节点排序（决定执行顺序）',
   PRIMARY KEY (`id`),
@@ -85,3 +87,33 @@ CREATE TABLE IF NOT EXISTS `flow_operation_log` (
   PRIMARY KEY (`id`),
   KEY `idx_instance_id` (`instance_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流程操作日志表';
+
+-- =====================================================
+-- 更新现有表结构
+-- =====================================================
+
+-- 为 flow_node_config 表添加 module_code 字段
+ALTER TABLE `flow_node_config` ADD COLUMN `module_code` varchar(20) DEFAULT '' COMMENT '模块编码（产品智能定制模块为C）' AFTER `handler_ids`;
+
+-- 为 flow_instance 表添加 tenant_id 字段
+ALTER TABLE `flow_instance` ADD COLUMN `tenant_id` bigint(20) DEFAULT NULL COMMENT '租户ID（产品智能定制模块需要）' AFTER `applicant_id`;
+
+-- 为 flow_node_config 表添加 uuid 字段（用于连线排序）
+ALTER TABLE `flow_node_config` ADD COLUMN `uuid` varchar(50) DEFAULT '' COMMENT '前端节点唯一标识（用于排序）' AFTER `id`;
+
+-- 为 flow_definition 表添加 can_initiate 字段（是否允许主动发起）
+ALTER TABLE `flow_definition` ADD COLUMN `can_initiate` tinyint(1) DEFAULT 1 COMMENT '是否允许主动发起（1允许，0不允许）' AFTER `status`;
+
+-- 为 flow_instance 表添加凭证和额外信息字段
+ALTER TABLE `flow_instance` ADD COLUMN `attachment_url` varchar(500) DEFAULT '' COMMENT '凭证文件URL' AFTER `current_node_name`;
+ALTER TABLE `flow_instance` ADD COLUMN `attachment_name` varchar(200) DEFAULT '' COMMENT '凭证文件名' AFTER `attachment_url`;
+ALTER TABLE `flow_instance` ADD COLUMN `extra_info` varchar(1000) DEFAULT '' COMMENT '额外信息' AFTER `attachment_name`;
+
+-- 为 flow_definition 表添加 module_code 字段（流程所属模块）
+ALTER TABLE `flow_definition` ADD COLUMN `module_code` varchar(10) DEFAULT '' COMMENT '流程所属模块（A/B/C）' AFTER `need_attachment`;
+
+-- 为 flow_node_config 表添加自定义字段配置
+ALTER TABLE `flow_node_config` ADD COLUMN `custom_fields` text COMMENT '自定义字段配置（JSON格式）' AFTER `sort`;
+
+-- 为 flow_task 表添加自定义字段值
+ALTER TABLE `flow_task` ADD COLUMN `custom_field_values` text COMMENT '自定义字段值（JSON格式）' AFTER `deleted`;

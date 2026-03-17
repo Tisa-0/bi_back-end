@@ -41,7 +41,7 @@ public class SecurityConfig {
             .exceptionHandling().authenticationEntryPoint(jwtAuthenticationEntryPoint).and()
             .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
             .authorizeRequests()
-            .antMatchers("/auth/**", "/error").permitAll()
+            .antMatchers("/auth/**", "/error", "/api/files/**").permitAll()
             .anyRequest().authenticated()
             .and()
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

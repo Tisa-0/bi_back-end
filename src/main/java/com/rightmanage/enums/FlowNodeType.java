@@ -7,7 +7,8 @@ public enum FlowNodeType {
     START("start", "开始节点"),
     APPROVE("approve", "审批节点"),
     NOTIFY("notify", "通知节点"),
-    END("end", "结束节点");
+    END("end", "结束节点"),
+    TEXT("text", "文本节点");
 
     private final String code;
     private final String name;

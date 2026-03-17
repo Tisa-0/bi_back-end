@@ -9,6 +9,7 @@ import com.rightmanage.entity.flow.*;
 import com.rightmanage.mapper.flow.*;
 import com.rightmanage.mapper.SysUserRoleMapper;
 import com.rightmanage.service.flow.FlowInstanceService;
+import com.rightmanage.service.flow.FlowDefinitionService;
 import com.rightmanage.service.flow.FlowOperationLogService;
 import com.rightmanage.service.SysUserService;
 import com.rightmanage.service.SysRoleService;
@@ -23,6 +24,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.Date;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @Service
 @Transactional
 public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, FlowInstance> implements FlowInstanceService {
@@ -31,6 +34,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private FlowInstanceMapper flowInstanceMapper;
     @Autowired
     private FlowDefinitionMapper flowDefinitionMapper;
+    @Autowired
+    private FlowDefinitionService flowDefinitionService;
     @Autowired
     private FlowNodeConfigMapper flowNodeConfigMapper;
     @Autowired
@@ -43,6 +48,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private SysRoleService sysRoleService;
     @Autowired
     private SysUserRoleMapper sysUserRoleMapper;
+    @Autowired
+    private FlowTemplateParamMapper flowTemplateParamMapper;
+    @Autowired
+    private FlowInstanceParamMapper flowInstanceParamMapper;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public List<FlowInstance> list() {
@@ -58,26 +69,47 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             throw new RuntimeException("流程不存在或未启用");
         }
 
-        // 2. 校验发起权限
+        // 2. 获取申请人信息（用于记录日志）
         SysUser applicant = sysUserService.getById(userId);
-        if (!hasStartRolePermission(flow, applicant)) {
-            throw new RuntimeException("当前角色无权限发起该流程");
+
+        // 3. 校验租户必填（如果流程包含产品智能定制角色）
+        boolean needTenant = flowDefinitionService.checkFlowNeedTenant(dto.getFlowId());
+        if (needTenant && dto.getTenantId() == null) {
+            throw new RuntimeException("该流程包含产品智能定制审批节点，必须选择租户");
         }
 
-        // 3. 创建流程实例
+        // 4. 校验凭证必填（如果流程需要上传凭证）
+        if (flow.getNeedAttachment() != null && flow.getNeedAttachment() == 1) {
+            if (dto.getAttachmentUrl() == null || dto.getAttachmentUrl().isEmpty()) {
+                throw new RuntimeException("该流程需要上传凭证，请上传凭证文件（支持Excel、PDF、WPS格式）");
+            }
+        }
+
+        // 5. 创建流程实例
         FlowInstance instance = new FlowInstance();
         instance.setFlowId(dto.getFlowId());
         instance.setInstanceName(dto.getInstanceName());
         instance.setApplicantId(userId);
+        instance.setTenantId(dto.getTenantId()); // 设置租户ID
         instance.setCurrentNodeName("开始节点");
         instance.setStatus(FlowInstanceStatus.RUNNING.getCode());
+        // 保存凭证信息
+        instance.setAttachmentUrl(dto.getAttachmentUrl());
+        instance.setAttachmentName(dto.getAttachmentName());
+
+        // 生成额外信息（当流程模板ID为5时，生成灰度发布链接）
+        if (dto.getFlowId() != null && dto.getFlowId() == 5L) {
+            String randomUrl = "https://gray.example.com/release/" + UUID.randomUUID().toString().substring(0, 8);
+            instance.setExtraInfo("请访问灰度发布链接：" + randomUrl);
+        }
+
         flowInstanceMapper.insert(instance);
 
-        // 4. 记录发起日志
+        // 5. 记录发起日志
         logService.saveLog(instance.getId(), userId, applicant.getUsername(),
                 FlowOperationType.INIT.getCode(), "用户" + applicant.getUsername() + "发起流程：" + dto.getInstanceName());
 
-        // 5. 获取节点配置
+        // 6. 获取节点配置
         List<FlowNodeConfig> nodeConfigs = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
                         .eq(FlowNodeConfig::getFlowId, dto.getFlowId())
@@ -88,7 +120,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             throw new RuntimeException("流程未配置节点，请先设计流程");
         }
 
-        // 6. 处理第一个节点（开始节点自动流转）
+        // 7. 处理第一个节点（开始节点自动流转）
         FlowNodeConfig firstNode = nodeConfigs.get(0);
         if (FlowNodeType.START.getCode().equals(firstNode.getNodeType())) {
             // 开始节点：自动完成，记录任务
@@ -105,6 +137,16 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         } else {
             // 第一个节点非开始节点，正常处理
             processNextNode(instance, firstNode);
+        }
+
+        // 8. 处理 REPORT_RELEASE 流程：填充文本节点的自定义字段值
+        if ("REPORT_RELEASE".equals(flow.getFlowCode())) {
+            fillTextNodeCustomFields(instance.getId(), nodeConfigs);
+        }
+
+        // 9. 保存流程参数
+        if (dto.getParams() != null && !dto.getParams().isEmpty()) {
+            saveFlowInstanceParams(instance.getId(), dto.getFlowId(), dto.getParams());
         }
 
         return instance.getId();
@@ -140,7 +182,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         if (FlowNodeType.APPROVE.getCode().equals(nextNode.getNodeType())) {
             // 审批节点：生成待办任务
-            String handlerIds = getRealHandlerIds(nextNode);
+            // 传递租户ID，用于产品智能定制模块的过滤
+            String handlerIds = getRealHandlerIds(nextNode, instance.getTenantId());
             String handlerNames = getHandlerNames(nextNode, handlerIds);
 
             // 创建待办任务
@@ -165,7 +208,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         } else if (FlowNodeType.NOTIFY.getCode().equals(nextNode.getNodeType())) {
             // 通知节点：自动触发（日志模拟）
-            String handlerIds = getRealHandlerIds(nextNode);
+            String handlerIds = getRealHandlerIds(nextNode, instance.getTenantId());
             String handlerNames = getHandlerNames(nextNode, handlerIds);
             String notifyContent = nextNode.getNotifyContent();
 
@@ -194,6 +237,18 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             // 记录日志
             logService.saveLog(instance.getId(), null, null,
                     FlowOperationType.COMPLETE.getCode(), "流程到达结束节点，状态改为已完成");
+
+        } else if (FlowNodeType.TEXT.getCode().equals(nextNode.getNodeType())) {
+            // 文本节点：自动通过，仅用于配置自定义字段做数据提示
+            // 创建自动任务记录（以便后续填充自定义字段值）
+            createAutoTask(instance.getId(), nextNode, "auto", "文本节点自动通过");
+
+            // 记录日志
+            logService.saveLog(instance.getId(), null, null,
+                    FlowOperationType.PASS.getCode(), "文本节点[" + nextNode.getNodeName() + "]自动通过");
+
+            // 自动流转到下一个节点
+            flowToNextNode(instance, nextNode);
         }
     }
 
@@ -278,13 +333,26 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public List<FlowInstanceVO> myInitiated(Long userId) {
-        List<FlowInstance> instanceList = flowInstanceMapper.selectList(
-                new LambdaQueryWrapper<FlowInstance>()
-                        .eq(FlowInstance::getApplicantId, userId)
-                        .eq(FlowInstance::getDeleted, 0)
-                        .orderByDesc(FlowInstance::getCreateTime)
-        );
+    public List<FlowInstanceVO> myInitiated(Long userId, String moduleCode) {
+        // 查询用户发起的流程
+        LambdaQueryWrapper<FlowInstance> wrapper = new LambdaQueryWrapper<FlowInstance>()
+                .eq(FlowInstance::getApplicantId, userId)
+                .eq(FlowInstance::getDeleted, 0)
+                .orderByDesc(FlowInstance::getCreateTime);
+
+        List<FlowInstance> instanceList = flowInstanceMapper.selectList(wrapper);
+
+        // 如果指定了模块编码，需要过滤
+        if (moduleCode != null && !moduleCode.isEmpty()) {
+            List<FlowInstance> filteredList = new ArrayList<>();
+            for (FlowInstance instance : instanceList) {
+                FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+                if (flow != null && moduleCode.equals(flow.getModuleCode())) {
+                    filteredList.add(instance);
+                }
+            }
+            instanceList = filteredList;
+        }
 
         List<FlowInstanceVO> voList = new ArrayList<>();
         for (FlowInstance instance : instanceList) {
@@ -306,14 +374,30 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public List<FlowTaskVO> myApproval(Long userId, Integer taskStatus) {
-        List<FlowTask> taskList = flowTaskMapper.selectList(
-                new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getHandlerId, userId)
-                        .eq(FlowTask::getStatus, taskStatus)
-                        .eq(FlowTask::getDeleted, 0)
-                        .orderByDesc(FlowTask::getCreateTime)
-        );
+    public List<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode) {
+        // 先查询用户待办任务
+        LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
+                .eq(FlowTask::getHandlerId, userId)
+                .eq(FlowTask::getStatus, taskStatus)
+                .eq(FlowTask::getDeleted, 0)
+                .orderByDesc(FlowTask::getCreateTime);
+
+        List<FlowTask> taskList = flowTaskMapper.selectList(wrapper);
+
+        // 如果指定了模块编码，需要过滤
+        if (moduleCode != null && !moduleCode.isEmpty()) {
+            List<FlowTask> filteredTasks = new ArrayList<>();
+            for (FlowTask task : taskList) {
+                FlowInstance instance = flowInstanceMapper.selectById(task.getInstanceId());
+                if (instance != null) {
+                    FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+                    if (flow != null && moduleCode.equals(flow.getModuleCode())) {
+                        filteredTasks.add(task);
+                    }
+                }
+            }
+            taskList = filteredTasks;
+        }
 
         List<FlowTaskVO> voList = new ArrayList<>();
         for (FlowTask task : taskList) {
@@ -358,8 +442,39 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         FlowInstanceStatus status = FlowInstanceStatus.fromCode(instance.getStatus());
         detailVO.setStatusName(status != null ? status.getName() : "");
         detailVO.setCreateTime(instance.getCreateTime());
+        
+        // 设置凭证信息
+        detailVO.setAttachmentUrl(instance.getAttachmentUrl());
+        detailVO.setAttachmentName(instance.getAttachmentName());
 
-        // 3. 获取节点执行记录
+        // 设置额外信息
+        detailVO.setExtraInfo(instance.getExtraInfo());
+
+        // 3. 获取流程参数信息
+        List<FlowInstanceParamVO> flowParamVOList = new ArrayList<>();
+        // 查询实例参数
+        FlowInstanceParam[] instanceParams = flowInstanceParamMapper.findByInstanceId(instanceId);
+        if (instanceParams != null && instanceParams.length > 0 && flow != null) {
+            // 获取流程模板参数配置，获取参数名称
+            List<FlowTemplateParam> templateParams = flowTemplateParamMapper.findByTemplateId(flow.getId());
+            final Map<String, String> paramNameMap = new HashMap<>();
+            if (templateParams != null && !templateParams.isEmpty()) {
+                for (FlowTemplateParam tp : templateParams) {
+                    paramNameMap.put(tp.getParamCode(), tp.getParamName());
+                }
+            }
+            // 组装参数VO
+            for (FlowInstanceParam ip : instanceParams) {
+                FlowInstanceParamVO paramVO = new FlowInstanceParamVO();
+                paramVO.setParamName(paramNameMap.getOrDefault(ip.getParamCode(), ip.getParamCode()));
+                paramVO.setParamValue(ip.getParamValue());
+                paramVO.setParamValueLabel(ip.getParamValueLabel()); // 设置参数值的中文翻译
+                flowParamVOList.add(paramVO);
+            }
+        }
+        detailVO.setFlowParams(flowParamVOList);
+
+        // 4. 获取节点执行记录
         List<FlowNodeConfig> nodeConfigs = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
                         .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
@@ -381,6 +496,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             FlowNodeType nodeType = FlowNodeType.fromCode(nodeConfig.getNodeType());
             nodeVO.setNodeType(nodeType != null ? nodeType.getName() : "");
+
+            // 设置节点的自定义字段配置
+            nodeVO.setCustomFields(nodeConfig.getCustomFields());
 
             // 匹配节点任务
             List<FlowTask> nodeTasks = taskList.stream()
@@ -408,6 +526,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 nodeVO.setComment(firstTask.getComment());
                 nodeVO.setExecuteTime(firstTask.getExecuteTime());
                 nodeVO.setStatus(firstTask.getStatus() == 0 ? "待处理" : "已完成");
+
+                // 设置任务的自定义字段值
+                nodeVO.setCustomFieldValues(firstTask.getCustomFieldValues());
             } else {
                 // 未执行的节点
                 nodeVO.setHandlerNames(getHandlerNames(nodeConfig, nodeConfig.getHandlerIds()));
@@ -474,9 +595,72 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     /**
-     * 解析处理人ID（角色→用户）
+     * 填充文本节点的自定义字段值（模拟 REPORT_RELEASE 流程）
+     * 当流程编码为 REPORT_RELEASE 时，随机生成 URL 并赋值给 REPORT_GREY_URL 字段
      */
-    private String getRealHandlerIds(FlowNodeConfig nodeConfig) {
+    private void fillTextNodeCustomFields(Long instanceId, List<FlowNodeConfig> nodeConfigs) {
+        try {
+            // 1. 查找文本节点
+            FlowNodeConfig textNode = nodeConfigs.stream()
+                    .filter(node -> FlowNodeType.TEXT.getCode().equals(node.getNodeType()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (textNode == null || !StringUtils.hasText(textNode.getCustomFields())) {
+                return;
+            }
+
+            // 2. 解析自定义字段配置
+            List<Map<String, String>> customFieldsConfig = objectMapper.readValue(
+                    textNode.getCustomFields(),
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class)
+            );
+
+            // 3. 检查是否包含 REPORT_GREY_URL 字段
+            boolean hasGreyUrlField = customFieldsConfig.stream()
+                    .anyMatch(field -> "REPORT_GREY_URL".equals(field.get("fieldName")));
+
+            if (!hasGreyUrlField) {
+                return;
+            }
+
+            // 4. 随机生成 URL
+            String randomUrl = "https://gray.example.com/report/" + UUID.randomUUID().toString().substring(0, 8);
+
+            // 5. 查找该文本节点对应的任务
+            List<FlowTask> tasks = flowTaskMapper.selectList(
+                    new LambdaQueryWrapper<FlowTask>()
+                            .eq(FlowTask::getInstanceId, instanceId)
+                            .eq(FlowTask::getNodeKey, textNode.getNodeKey())
+            );
+
+            if (tasks.isEmpty()) {
+                return;
+            }
+
+            // 6. 填充自定义字段值
+            Map<String, String> customFieldValues = new HashMap<>();
+            customFieldValues.put("REPORT_GREY_URL", randomUrl);
+
+            // 更新任务的自定义字段值
+            for (FlowTask task : tasks) {
+                task.setCustomFieldValues(objectMapper.writeValueAsString(customFieldValues));
+                flowTaskMapper.updateById(task);
+            }
+
+            System.out.println("【模拟填充】REPORT_RELEASE 流程自定义字段：REPORT_GREY_URL = " + randomUrl);
+
+        } catch (Exception e) {
+            System.err.println("填充文本节点自定义字段失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 解析处理人ID（角色→用户）
+     * @param nodeConfig 节点配置
+     * @param tenantId 租户ID（产品智能定制模块需要）
+     */
+    private String getRealHandlerIds(FlowNodeConfig nodeConfig, Long tenantId) {
         if (!StringUtils.hasText(nodeConfig.getHandlerType()) || !StringUtils.hasText(nodeConfig.getHandlerIds())) {
             return "";
         }
@@ -487,11 +671,17 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             // 角色转用户 - 通过SysUserRole关联表查询
             for (String roleId : nodeConfig.getHandlerIds().split(",")) {
                 if (!StringUtils.hasText(roleId)) continue;
-                // 查询拥有该角色的用户ID
-                List<SysUserRole> userRoles = sysUserRoleMapper.selectList(
-                    new LambdaQueryWrapper<SysUserRole>()
-                        .eq(SysUserRole::getRoleId, Long.parseLong(roleId.trim()))
-                );
+
+                // 如果是产品智能定制模块（C）的角色，需要按租户过滤
+                LambdaQueryWrapper<SysUserRole> queryWrapper = new LambdaQueryWrapper<>();
+                queryWrapper.eq(SysUserRole::getRoleId, Long.parseLong(roleId.trim()));
+
+                // 产品智能定制模块按租户过滤
+                if ("C".equals(nodeConfig.getModuleCode()) && tenantId != null) {
+                    queryWrapper.eq(SysUserRole::getTenantId, tenantId);
+                }
+
+                List<SysUserRole> userRoles = sysUserRoleMapper.selectList(queryWrapper);
                 for (SysUserRole ur : userRoles) {
                     userIds.add(ur.getUserId().toString());
                 }
@@ -535,5 +725,69 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         return names.length() > 0 ? names.substring(0, names.length() - 1) : "无";
+    }
+
+    /**
+     * 保存流程实例参数
+     */
+    private void saveFlowInstanceParams(Long instanceId, Long flowId, Map<String, Object> params) {
+        try {
+            // 获取模板参数配置
+            List<FlowTemplateParam> templateParams = flowTemplateParamMapper.findByTemplateId(flowId);
+            if (templateParams == null || templateParams.isEmpty()) {
+                return;
+            }
+
+            // 构建参数映射
+            Map<String, Long> paramIdMap = new HashMap<>();
+            Map<String, FlowTemplateParam> paramConfigMap = new HashMap<>();
+            for (FlowTemplateParam tp : templateParams) {
+                paramIdMap.put(tp.getParamCode(), tp.getId());
+                paramConfigMap.put(tp.getParamCode(), tp);
+            }
+
+            // 批量保存实例参数
+            List<FlowInstanceParam> instanceParams = new ArrayList<>();
+            for (Map.Entry<String, Object> entry : params.entrySet()) {
+                String paramCode = entry.getKey();
+                Object paramValue = entry.getValue();
+
+                if (paramIdMap.containsKey(paramCode) && paramValue != null) {
+                    FlowInstanceParam ip = new FlowInstanceParam();
+                    ip.setInstanceId(instanceId);
+                    ip.setTemplateParamId(paramIdMap.get(paramCode));
+                    ip.setParamCode(paramCode);
+                    ip.setParamValue(paramValue.toString());
+
+                    // 计算 paramValueLabel：如果是下拉框类型，从 optionJson 中匹配 label
+                    FlowTemplateParam templateParam = paramConfigMap.get(paramCode);
+                    if (templateParam != null && "select".equals(templateParam.getParamType())
+                            && templateParam.getOptionJson() != null && !templateParam.getOptionJson().isEmpty()) {
+                        try {
+                            List<Map<String, String>> options = objectMapper.readValue(
+                                    templateParam.getOptionJson(),
+                                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+                            for (Map<String, String> option : options) {
+                                if (paramValue.toString().equals(option.get("value"))) {
+                                    ip.setParamValueLabel(option.get("label"));
+                                    break;
+                                }
+                            }
+                        } catch (Exception e) {
+                            System.err.println("解析 optionJson 失败: " + e.getMessage());
+                        }
+                    }
+
+                    instanceParams.add(ip);
+                }
+            }
+
+            if (!instanceParams.isEmpty()) {
+                flowInstanceParamMapper.batchSave(instanceParams.toArray(new FlowInstanceParam[0]));
+            }
+        } catch (Exception e) {
+            // 记录错误但不影响流程发起
+            System.err.println("保存流程参数失败: " + e.getMessage());
+        }
     }
 }

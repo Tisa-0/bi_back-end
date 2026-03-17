@@ -36,4 +36,17 @@ public class FlowDefinition implements Serializable {
 
     @TableLogic
     private Integer deleted;
+
+    // 非数据库字段，用于返回前端是否需要租户
+    @TableField(exist = false)
+    private Boolean needTenant;
+
+    // 是否允许主动发起（1允许，0不允许）
+    private Integer canInitiate;
+
+    // 是否需要上传凭证（1需要，0不需要）
+    private Integer needAttachment;
+
+    // 流程所属模块（A/B/C）
+    private String moduleCode;
 }

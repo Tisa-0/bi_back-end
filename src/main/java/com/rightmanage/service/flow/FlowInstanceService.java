@@ -27,12 +27,12 @@ public interface FlowInstanceService {
     /**
      * 获取我的流转（发起的流程）
      */
-    List<FlowInstanceVO> myInitiated(Long userId);
+    List<FlowInstanceVO> myInitiated(Long userId, String moduleCode);
 
     /**
      * 获取我的审批（待处理/已处理任务）
      */
-    List<FlowTaskVO> myApproval(Long userId, Integer taskStatus);
+    List<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode);
 
     /**
      * 获取流程详情

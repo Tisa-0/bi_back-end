@@ -41,4 +41,7 @@ public class FlowTask implements Serializable {
 
     @TableLogic
     private Integer deleted;
+
+    // 自定义字段值（JSON格式：{fieldName: "value", ...}）
+    private String customFieldValues;
 }

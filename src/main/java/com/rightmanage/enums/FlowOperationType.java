@@ -8,6 +8,7 @@ public enum FlowOperationType {
     APPROVE("approve", "审批通过"),
     REJECT("reject", "审批驳回"),
     NOTIFY("notify", "自动通知"),
+    PASS("pass", "自动通过"),
     CANCEL("cancel", "流程撤销"),
     TERMINATE("terminate", "流程终止"),
     COMPLETE("complete", "流程完成");

@@ -1,5 +1,6 @@
 package com.rightmanage.controller;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.rightmanage.common.Result;
 import com.rightmanage.entity.SysTenant;
 import com.rightmanage.service.SysTenantService;
@@ -18,6 +19,15 @@ public class SysTenantController {
     @GetMapping("/list")
     public Result<List<SysTenant>> list(@RequestParam(required = false) String moduleCode) {
         return Result.success(sysTenantService.listByModuleCode(moduleCode));
+    }
+
+    @GetMapping("/page")
+    public Result<IPage<SysTenant>> page(
+            @RequestParam(required = false) String moduleCode,
+            @RequestParam(required = false) String tenantName,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(sysTenantService.page(moduleCode, tenantName, pageNum, pageSize));
     }
 
     @GetMapping("/{id}")

@@ -27,8 +27,9 @@ public class SysUserController {
     @GetMapping("/page")
     public Result<IPage<SysUser>> page(
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(sysUserService.page(pageNum, pageSize));
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            String username) {
+        return Result.success(sysUserService.page(pageNum, pageSize, username));
     }
     @GetMapping("/{id}")
     public Result<SysUser> getById(@PathVariable Long id) {

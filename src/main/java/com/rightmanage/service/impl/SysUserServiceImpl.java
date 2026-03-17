@@ -28,9 +28,12 @@ public class SysUserServiceImpl implements SysUserService {
         return sysUserMapper.selectList(null);
     }
     @Override
-    public IPage<SysUser> page(Integer pageNum, Integer pageSize) {
+    public IPage<SysUser> page(Integer pageNum, Integer pageSize, String username) {
         Page<SysUser> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
+        if (username != null && !username.isEmpty()) {
+            wrapper.like(SysUser::getUsername, username);
+        }
         wrapper.orderByDesc(SysUser::getCreateTime);
         return sysUserMapper.selectPage(page, wrapper);
     }

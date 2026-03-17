@@ -16,4 +16,10 @@ public class FlowNodeDetailVO {
     private String comment;
     private Date executeTime;
     private String status;
+
+    // 自定义字段配置（用于显示中文名称）
+    private String customFields;
+
+    // 自定义字段值（JSON格式：{fieldName: "value", ...}）
+    private String customFieldValues;
 }

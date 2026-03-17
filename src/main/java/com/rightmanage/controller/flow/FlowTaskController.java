@@ -21,11 +21,20 @@ public class FlowTaskController {
     private FlowInstanceService flowInstanceService;
 
     /**
+     * 获取待办任务列表
+     */
+    @GetMapping("/pending")
+    public Result<List<FlowTaskVO>> pending(@RequestParam Long userId, @RequestParam(required = false) String moduleCode) {
+        // taskStatus = 0 表示待处理
+        return Result.success(flowInstanceService.myApproval(userId, 0, moduleCode));
+    }
+
+    /**
      * 获取我的审批任务（待处理）
      */
     @GetMapping("/myApproval")
-    public Result<List<FlowTaskVO>> myApproval(@RequestParam Long userId, @RequestParam Integer taskStatus) {
-        return Result.success(flowInstanceService.myApproval(userId, taskStatus));
+    public Result<List<FlowTaskVO>> myApproval(@RequestParam Long userId, @RequestParam Integer taskStatus, @RequestParam(required = false) String moduleCode) {
+        return Result.success(flowInstanceService.myApproval(userId, taskStatus, moduleCode));
     }
 
     /**

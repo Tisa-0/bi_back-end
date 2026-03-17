@@ -30,7 +30,16 @@ public class SysMenuController {
      */
     @GetMapping("/tree")
     public Result<List<SysMenuVO>> tree(@RequestParam(required = false) String moduleCode,
-                                          @RequestParam(required = false) Long tenantId) {
+                                          @RequestParam(required = false) Long tenantId,
+                                          @RequestParam(required = false) Long userId) {
+        if (userId != null && moduleCode != null && !moduleCode.isEmpty()) {
+            // 如果传入userId，则根据用户角色过滤菜单
+            // 模块C需要根据租户ID过滤
+            if ("C".equals(moduleCode) && tenantId != null) {
+                return Result.success(sysMenuService.listTreeByUserIdAndModuleCodeAndTenant(userId, moduleCode, tenantId));
+            }
+            return Result.success(sysMenuService.listTreeByUserIdAndModuleCode(userId, moduleCode));
+        }
         if (moduleCode != null && !moduleCode.isEmpty()) {
             // 产品智能定制模块使用新的按租户过滤方法
             if ("C".equals(moduleCode) && tenantId != null) {

@@ -1,6 +1,8 @@
 package com.rightmanage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.rightmanage.entity.SysTenant;
 import com.rightmanage.mapper.SysTenantMapper;
 import com.rightmanage.service.SysTenantService;
@@ -51,5 +53,19 @@ public class SysTenantServiceImpl implements SysTenantService {
     @Override
     public boolean deleteById(Long id) {
         return sysTenantMapper.deleteById(id) > 0;
+    }
+
+    @Override
+    public IPage<SysTenant> page(String moduleCode, String tenantName, Integer pageNum, Integer pageSize) {
+        Page<SysTenant> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<SysTenant> wrapper = new LambdaQueryWrapper<>();
+        if (moduleCode != null && !moduleCode.isEmpty()) {
+            wrapper.eq(SysTenant::getModuleCode, moduleCode);
+        }
+        if (tenantName != null && !tenantName.isEmpty()) {
+            wrapper.like(SysTenant::getTenantName, tenantName);
+        }
+        wrapper.orderByDesc(SysTenant::getId);
+        return sysTenantMapper.selectPage(page, wrapper);
     }
 }

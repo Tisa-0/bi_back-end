@@ -33,8 +33,8 @@ public class FlowInstanceController {
      * 获取我的流程实例
      */
     @GetMapping("/myInitiated")
-    public Result<List<FlowInstanceVO>> getMyInstances(@RequestParam Long userId) {
-        return Result.success(flowInstanceService.myInitiated(userId));
+    public Result<List<FlowInstanceVO>> getMyInstances(@RequestParam Long userId, @RequestParam(required = false) String moduleCode) {
+        return Result.success(flowInstanceService.myInitiated(userId, moduleCode));
     }
 
     /**

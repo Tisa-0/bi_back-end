@@ -37,4 +37,9 @@ public interface FlowDefinitionService {
      * 获取当前用户可发起的流程列表
      */
     List<FlowDefinition> getStartableFlows(Long userId);
+
+    /**
+     * 检查流程是否需要租户（判断是否包含产品智能定制模块的角色）
+     */
+    boolean checkFlowNeedTenant(Long flowId);
 }

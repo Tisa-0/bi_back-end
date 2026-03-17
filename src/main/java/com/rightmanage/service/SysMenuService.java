@@ -8,6 +8,17 @@ public interface SysMenuService {
     List<SysMenu> list();
     List<SysMenu> listByModuleCode(String moduleCode);
     List<SysMenuVO> listTreeByModuleCode(String moduleCode);
+
+    /**
+     * 根据用户ID和模块代码获取用户有权限的菜单树
+     * @param userId 用户ID
+     * @param moduleCode 模块代码（A/B/C）
+     * @return 菜单树列表
+     */
+    List<SysMenuVO> listTreeByUserIdAndModuleCode(Long userId, String moduleCode);
+
+    List<SysMenuVO> listTreeByUserIdAndModuleCodeAndTenant(Long userId, String moduleCode, Long tenantId);
+
     SysMenu getById(Long id);
     boolean save(SysMenu menu);
     boolean updateById(SysMenu menu);
