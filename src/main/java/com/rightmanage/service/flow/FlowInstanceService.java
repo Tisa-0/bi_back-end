@@ -1,6 +1,7 @@
 package com.rightmanage.service.flow;
 
 import com.rightmanage.entity.flow.*;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import java.util.List;
 
 public interface FlowInstanceService {
@@ -25,14 +26,14 @@ public interface FlowInstanceService {
     void terminateFlow(Long instanceId, Long userId);
 
     /**
-     * 获取我的流转（发起的流程）
+     * 获取我的流转（发起的流程）- 分页
      */
-    List<FlowInstanceVO> myInitiated(Long userId, String moduleCode);
+    IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, Long tenantId, Long flowId, Integer pageNum, Integer pageSize);
 
     /**
-     * 获取我的审批（待处理/已处理任务）
+     * 获取我的审批（待处理/已处理任务）- 分页
      */
-    List<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode);
+    IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, Long tenantId, Long flowId, Integer pageNum, Integer pageSize);
 
     /**
      * 获取流程详情

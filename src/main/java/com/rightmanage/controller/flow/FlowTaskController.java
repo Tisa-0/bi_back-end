@@ -5,6 +5,7 @@ import com.rightmanage.entity.flow.FlowTask;
 import com.rightmanage.entity.flow.FlowTaskVO;
 import com.rightmanage.entity.flow.FlowApproveDTO;
 import com.rightmanage.service.flow.FlowInstanceService;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,20 +22,33 @@ public class FlowTaskController {
     private FlowInstanceService flowInstanceService;
 
     /**
-     * 获取待办任务列表
+     * 获取待办任务列表（分页）
      */
     @GetMapping("/pending")
-    public Result<List<FlowTaskVO>> pending(@RequestParam Long userId, @RequestParam(required = false) String moduleCode) {
+    public Result<IPage<FlowTaskVO>> pending(
+            @RequestParam Long userId,
+            @RequestParam(required = false) String moduleCode,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) Long flowId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
         // taskStatus = 0 表示待处理
-        return Result.success(flowInstanceService.myApproval(userId, 0, moduleCode));
+        return Result.success(flowInstanceService.myApproval(userId, 0, moduleCode, tenantId, flowId, pageNum, pageSize));
     }
 
     /**
-     * 获取我的审批任务（待处理）
+     * 获取我的审批任务（待处理/已处理，分页）
      */
     @GetMapping("/myApproval")
-    public Result<List<FlowTaskVO>> myApproval(@RequestParam Long userId, @RequestParam Integer taskStatus, @RequestParam(required = false) String moduleCode) {
-        return Result.success(flowInstanceService.myApproval(userId, taskStatus, moduleCode));
+    public Result<IPage<FlowTaskVO>> myApproval(
+            @RequestParam Long userId,
+            @RequestParam Integer taskStatus,
+            @RequestParam(required = false) String moduleCode,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) Long flowId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(flowInstanceService.myApproval(userId, taskStatus, moduleCode, tenantId, flowId, pageNum, pageSize));
     }
 
     /**

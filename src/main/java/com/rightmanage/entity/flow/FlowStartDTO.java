@@ -1,6 +1,7 @@
 package com.rightmanage.entity.flow;
 
 import lombok.Data;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,4 +15,5 @@ public class FlowStartDTO {
     private String attachmentUrl; // 凭证文件URL
     private String attachmentName; // 凭证文件名
     private Map<String, Object> params; // 流程参数
+    private List<DynamicHandlerDTO> dynamicHandlers; // 动态用户处理人列表
 }

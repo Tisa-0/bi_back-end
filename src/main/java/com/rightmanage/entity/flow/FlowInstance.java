@@ -45,4 +45,7 @@ public class FlowInstance implements Serializable {
 
     // 额外信息
     private String extraInfo; // 额外信息（如灰度发布链接等）
+
+    // 动态处理人信息（JSON格式：[{nodeKey: "xxx", handlerId: 1, handlerName: "xxx"}]）
+    private String dynamicHandlers;
 }

@@ -6,6 +6,7 @@ import com.rightmanage.entity.flow.FlowStartDTO;
 import com.rightmanage.entity.flow.FlowDetailVO;
 import com.rightmanage.entity.flow.FlowInstanceVO;
 import com.rightmanage.service.flow.FlowInstanceService;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,11 +31,17 @@ public class FlowInstanceController {
     }
 
     /**
-     * 获取我的流程实例
+     * 获取我的流程实例（分页）
      */
     @GetMapping("/myInitiated")
-    public Result<List<FlowInstanceVO>> getMyInstances(@RequestParam Long userId, @RequestParam(required = false) String moduleCode) {
-        return Result.success(flowInstanceService.myInitiated(userId, moduleCode));
+    public Result<IPage<FlowInstanceVO>> getMyInstances(
+            @RequestParam Long userId,
+            @RequestParam(required = false) String moduleCode,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) Long flowId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(flowInstanceService.myInitiated(userId, moduleCode, tenantId, flowId, pageNum, pageSize));
     }
 
     /**

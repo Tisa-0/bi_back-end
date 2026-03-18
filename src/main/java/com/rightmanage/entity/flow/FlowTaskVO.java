@@ -14,6 +14,7 @@ public class FlowTaskVO {
     private String flowName;
     private String nodeKey;
     private String nodeName;
+    private String currentNodeName; // 当前节点名称（前端显示用）
     private String nodeType;
     private Long handlerId;
     private String handlerName;
@@ -22,5 +23,6 @@ public class FlowTaskVO {
     private String action;
     private String comment;
     private Date executeTime;
+    private Date createTime; // 任务创建时间（到达时间）
     private Integer status;
 }

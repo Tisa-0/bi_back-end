@@ -52,6 +52,7 @@ CREATE TABLE `flow_instance`  (
   `attachment_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
   `attachment_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
   `extra_info` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '额外信息',
+  `dynamic_handlers` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '动态处理人信息（JSON格式）',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_applicant_id`(`applicant_id`) USING BTREE,
   INDEX `idx_status`(`status`) USING BTREE
