@@ -39,4 +39,12 @@ public class FlowNodeConfig implements Serializable {
 
     // 自定义字段配置（JSON格式：[{fieldName: "englishName", fieldLabel: "中文名称"}]）
     private String customFields;
+
+    private String executeModules; // 审批后需要调用的模块编码，多个用逗号分隔
+
+    // 是否开启通知（0否，1是，仅approve节点生效）
+    private String enableNotify;
+
+    // 通知方式（畅聊/邮件/知会，仅enable_notify=1时生效）
+    private String notifyType;
 }

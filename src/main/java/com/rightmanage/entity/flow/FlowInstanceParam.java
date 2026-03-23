@@ -16,4 +16,5 @@ public class FlowInstanceParam implements Serializable {
     private String paramCode;
     private String paramValue;
     private String paramValueLabel; // 参数值的中文翻译
+    private java.util.Date createTime;
 }

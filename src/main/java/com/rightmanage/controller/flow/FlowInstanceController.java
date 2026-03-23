@@ -78,4 +78,15 @@ public class FlowInstanceController {
         flowInstanceService.terminateFlow(instanceId, userId);
         return Result.success();
     }
+
+    /**
+     * 主动触发流程节点通知
+     * @param instanceId 流程实例ID
+     * @param userId 操作人ID
+     * @return 通知结果
+     */
+    @PostMapping("/notify")
+    public Result<String> triggerNotify(@RequestParam Long instanceId, @RequestParam Long userId) {
+        return Result.success(flowInstanceService.triggerNodeNotify(instanceId, userId));
+    }
 }

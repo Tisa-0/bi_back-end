@@ -8,7 +8,9 @@ public enum FlowNodeType {
     APPROVE("approve", "审批节点"),
     NOTIFY("notify", "通知节点"),
     END("end", "结束节点"),
-    TEXT("text", "文本节点");
+    TEXT("text", "文本节点"),
+    LOGIC_AND("logic_and", "逻辑与"),
+    LOGIC_OR("logic_or", "逻辑或");
 
     private final String code;
     private final String name;
@@ -33,5 +35,12 @@ public enum FlowNodeType {
             }
         }
         return null;
+    }
+
+    /**
+     * 判断是否为逻辑判断节点
+     */
+    public static boolean isLogicNode(String code) {
+        return LOGIC_AND.code.equals(code) || LOGIC_OR.code.equals(code);
     }
 }

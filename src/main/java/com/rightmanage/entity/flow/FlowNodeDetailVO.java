@@ -22,4 +22,10 @@ public class FlowNodeDetailVO {
 
     // 自定义字段值（JSON格式：{fieldName: "value", ...}）
     private String customFieldValues;
+
+    // 外部模块执行日志
+    private String executeLog;
+
+    // 节点层级（用于前端显示并行关系）
+    private Integer level;
 }

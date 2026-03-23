@@ -7,6 +7,7 @@ import com.rightmanage.entity.SysUser;
 import com.rightmanage.entity.flow.FlowDefinition;
 import com.rightmanage.entity.flow.FlowDefinitionDetailDTO;
 import com.rightmanage.entity.flow.FlowNodeConfig;
+import com.rightmanage.enums.FlowNodeType;
 import com.rightmanage.mapper.flow.FlowDefinitionMapper;
 import com.rightmanage.mapper.flow.FlowNodeConfigMapper;
 import com.rightmanage.service.flow.FlowDefinitionService;
@@ -56,84 +57,113 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     }
 
     /**
-     * 根据连线顺序对节点进行排序（使用拓扑排序）
+     * 根据连线顺序对节点进行排序（使用 Kahn 正向 BFS + 最长路径 + 过滤后重映射层级）
+     * 与 buildNodeDetailListWithParallelism 算法保持一致
      */
     private List<FlowNodeConfig> sortNodesByLines(List<FlowNodeConfig> nodes, List<?> lines) {
-        if (nodes == null || nodes.isEmpty() || lines == null || lines.isEmpty()) {
+        if (nodes == null || nodes.isEmpty()) {
             return nodes;
         }
-
-        // 构建节点映射（使用uuid字段）
-        Map<String, FlowNodeConfig> nodeMap = new HashMap<>();
-        for (FlowNodeConfig node : nodes) {
-            String nodeUuid = node.getUuid();
-            if (nodeUuid != null) {
-                nodeMap.put(nodeUuid, node);
-            }
+        if (lines == null || lines.isEmpty()) {
+            return new ArrayList<>(nodes);
         }
 
-        // 计算每个节点的入度
-        Map<String, Integer> inDegree = new HashMap<>();
-        for (FlowNodeConfig node : nodes) {
-            String nodeUuid = node.getUuid();
-            if (nodeUuid != null) {
-                inDegree.put(nodeUuid, 0);
+        // 获取节点唯一标识
+        java.util.function.Function<FlowNodeConfig, String> getNodeId = node -> {
+            if (node.getUuid() != null && !node.getUuid().isEmpty()) {
+                return node.getUuid();
             }
+            return String.valueOf(nodes.indexOf(node));
+        };
+
+        // 所有节点
+        List<FlowNodeConfig> allNodes = new ArrayList<>(nodes);
+
+        // 【过滤前】保留逻辑节点用于层级计算
+        Map<String, FlowNodeConfig> nodeMap = new LinkedHashMap<>();
+        for (FlowNodeConfig node : allNodes) {
+            nodeMap.put(getNodeId.apply(node), node);
         }
 
-        // 构建邻接表（from -> to）并更新入度
-        Map<String, List<String>> adjacencyMap = new HashMap<>();
+        // 构建邻接表和入度（使用所有节点，保证拓扑完整性）
+        Map<String, Integer> inDegree = new LinkedHashMap<>();
+        Map<String, List<String>> adjacency = new LinkedHashMap<>();
+        Map<String, Integer> level = new LinkedHashMap<>();
+        for (FlowNodeConfig node : allNodes) {
+            String id = getNodeId.apply(node);
+            inDegree.put(id, 0);
+            adjacency.put(id, new ArrayList<>());
+            level.put(id, 0);
+        }
+
         for (Object lineObj : lines) {
             try {
                 Map<String, Object> line = convertToMap(lineObj);
                 String fromNode = String.valueOf(line.get("fromNode"));
                 String toNode = String.valueOf(line.get("toNode"));
                 if (fromNode != null && !fromNode.equals("null") && toNode != null && !toNode.equals("null")) {
-                    adjacencyMap.computeIfAbsent(fromNode, k -> new ArrayList<>()).add(toNode);
-                    inDegree.put(toNode, inDegree.getOrDefault(toNode, 0) + 1);
+                    if (adjacency.containsKey(fromNode) && inDegree.containsKey(toNode)) {
+                        adjacency.get(fromNode).add(toNode);
+                        inDegree.put(toNode, inDegree.get(toNode) + 1);
+                    }
                 }
             } catch (Exception e) {
-                // 忽略转换异常
+                // 忽略
             }
         }
 
-        // 拓扑排序：使用队列存储入度为0的节点
+        // Kahn 正向 BFS 计算最长路径（level）
+        Map<String, Integer> mutableInDegree = new LinkedHashMap<>(inDegree);
         Queue<String> queue = new LinkedList<>();
-        for (String nodeId : inDegree.keySet()) {
-            if (inDegree.get(nodeId) == 0) {
-                queue.offer(nodeId);
+        for (String id : nodeMap.keySet()) {
+            if (mutableInDegree.get(id) == 0) {
+                level.put(id, 0);
+                queue.add(id);
             }
+        }
+
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            int currentLevel = level.get(current);
+            for (String next : adjacency.get(current)) {
+                level.put(next, Math.max(level.get(next), currentLevel + 1));
+                int newInDegree = mutableInDegree.get(next) - 1;
+                mutableInDegree.put(next, newInDegree);
+                if (newInDegree == 0) {
+                    queue.add(next);
+                }
+            }
+        }
+
+        // 【过滤逻辑节点后重映射层级，使层级连续】
+        // 构建原始层级到显示层级的映射
+        Map<Integer, Integer> originalToDisplayLevel = new LinkedHashMap<>();
+        int displayLevelCounter = 0;
+        int maxOrigLevel = Collections.max(level.values());
+        for (int origLevel = 0; origLevel <= maxOrigLevel; origLevel++) {
+            final int lvl = origLevel;
+            boolean hasDisplayNode = nodes.stream()
+                    .anyMatch(n -> !FlowNodeType.isLogicNode(n.getNodeType())
+                            && level.get(getNodeId.apply(n)) == lvl);
+            if (hasDisplayNode) {
+                originalToDisplayLevel.put(origLevel, displayLevelCounter);
+                displayLevelCounter++;
+            }
+        }
+
+        // 按重映射后的层级分组，同一层级内按原始顺序
+        Map<Integer, List<FlowNodeConfig>> levelMap = new TreeMap<>();
+        for (FlowNodeConfig node : nodes) {
+            String id = getNodeId.apply(node);
+            int origLevel = level.get(id);
+            int dispLevel = originalToDisplayLevel.getOrDefault(origLevel, origLevel);
+            levelMap.computeIfAbsent(dispLevel, k -> new ArrayList<>()).add(node);
         }
 
         List<FlowNodeConfig> sorted = new ArrayList<>();
-        while (!queue.isEmpty()) {
-            String nodeId = queue.poll();
-            FlowNodeConfig node = nodeMap.get(nodeId);
-            if (node != null) {
-                sorted.add(node);
-            }
-
-            // 处理所有出边
-            List<String> nextNodes = adjacencyMap.get(nodeId);
-            if (nextNodes != null) {
-                for (String nextId : nextNodes) {
-                    int newDegree = inDegree.get(nextId) - 1;
-                    inDegree.put(nextId, newDegree);
-                    if (newDegree == 0) {
-                        queue.offer(nextId);
-                    }
-                }
-            }
+        for (List<FlowNodeConfig> levelNodes : levelMap.values()) {
+            sorted.addAll(levelNodes);
         }
-
-        // 如果有环或未遍历到的节点，添加备用节点
-        for (FlowNodeConfig node : nodes) {
-            String nodeUuid = node.getUuid();
-            if (nodeUuid != null && !sorted.contains(node)) {
-                sorted.add(node);
-            }
-        }
-
         return sorted;
     }
 

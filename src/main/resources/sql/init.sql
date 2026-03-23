@@ -21,17 +21,6 @@ CREATE TABLE `flow_definition`  (
   UNIQUE INDEX `uk_flow_code`(`flow_code`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程定义表' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of flow_definition
--- ----------------------------
-INSERT INTO `flow_definition` VALUES (1, '流程1', '1', '[{\"id\":\"42d538e3-3c83-4263-9220-5281285e179f\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":70,\"y\":191,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"fdffa56e-b8d3-447a-818e-b02688bba9d5\",\"name\":\"审批节点\",\"type\":\"approve\",\"x\":250,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"5917f365-49f3-4bf8-b58f-4c3c5f1ae397\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":400,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"}]', '', 1, 1, 1, '2026-03-05 17:11:44', '2026-03-06 10:50:19', 1, NULL, '');
-INSERT INTO `flow_definition` VALUES (2, '审批流程1', '1234', '{\"nodes\":[{\"id\":\"a024bf47-ed49-4069-8d45-d655e1a5f5ec\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":100,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"9a5ae316-d0f0-48cd-b893-868742863875\",\"name\":\"审批节点\",\"type\":\"approve\",\"x\":306,\"y\":199,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"46957f62-90c8-4870-8b8a-11aecba6d9c6\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":535,\"y\":198,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"}],\"lines\":[{\"fromNode\":\"a024bf47-ed49-4069-8d45-d655e1a5f5ec\",\"toNode\":\"9a5ae316-d0f0-48cd-b893-868742863875\"},{\"fromNode\":\"9a5ae316-d0f0-48cd-b893-868742863875\",\"toNode\":\"46957f62-90c8-4870-8b8a-11aecba6d9c6\"}]}', '', 1, 1, 1, '2026-03-06 10:13:21', '2026-03-06 10:50:17', 1, NULL, '');
-INSERT INTO `flow_definition` VALUES (3, '审批流程1', 'FLOW_1772765233373', '{\"nodes\":[{\"id\":\"a024bf47-ed49-4069-8d45-d655e1a5f5ec\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":100,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"9a5ae316-d0f0-48cd-b893-868742863875\",\"name\":\"审批节点\",\"type\":\"approve\",\"x\":306,\"y\":199,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"46957f62-90c8-4870-8b8a-11aecba6d9c6\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":751,\"y\":198,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"32b7157b-4f5f-4667-9f17-fdd29d880fce\",\"name\":\"通知节点\",\"type\":\"notify\",\"x\":534,\"y\":199,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"}],\"lines\":[{\"fromNode\":\"a024bf47-ed49-4069-8d45-d655e1a5f5ec\",\"toNode\":\"9a5ae316-d0f0-48cd-b893-868742863875\"},{\"fromNode\":\"9a5ae316-d0f0-48cd-b893-868742863875\",\"toNode\":\"32b7157b-4f5f-4667-9f17-fdd29d880fce\"},{\"fromNode\":\"32b7157b-4f5f-4667-9f17-fdd29d880fce\",\"toNode\":\"46957f62-90c8-4870-8b8a-11aecba6d9c6\"}]}', '', 1, 1, 1, '2026-03-06 10:47:13', '2026-03-06 10:50:15', 1, NULL, '');
-INSERT INTO `flow_definition` VALUES (4, '报表审批流程', 'FLOW_1772765239115', '{\"nodes\":[{\"id\":\"a024bf47-ed49-4069-8d45-d655e1a5f5ec\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":56,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\",\"moduleCode\":\"C\"},{\"id\":\"46957f62-90c8-4870-8b8a-11aecba6d9c6\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":750,\"y\":198,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\",\"moduleCode\":\"A\"},{\"id\":\"9a6c6174-9085-4911-85ca-0bce9d910869\",\"name\":\"租户外审批\",\"type\":\"approve\",\"x\":553,\"y\":199,\"handlerType\":\"role\",\"handlerIds\":[\"1\"],\"notifyContent\":\"\",\"moduleCode\":\"A\"},{\"id\":\"468209d6-fa2e-4278-a5c1-2b39c7b76658\",\"name\":\"通知节点\",\"type\":\"notify\",\"x\":393,\"y\":198,\"handlerType\":\"role\",\"handlerIds\":[\"1\"],\"notifyContent\":\"\",\"moduleCode\":\"A\"},{\"id\":\"2e78ed4f-781c-4a18-a74e-b2b947ef6ce0\",\"name\":\"租户内审批\",\"type\":\"approve\",\"x\":218,\"y\":203,\"handlerType\":\"role\",\"handlerIds\":[\"6\"],\"notifyContent\":\"\",\"moduleCode\":\"C\"}],\"lines\":[{\"fromNode\":\"2e78ed4f-781c-4a18-a74e-b2b947ef6ce0\",\"toNode\":\"468209d6-fa2e-4278-a5c1-2b39c7b76658\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"a024bf47-ed49-4069-8d45-d655e1a5f5ec\",\"toNode\":\"2e78ed4f-781c-4a18-a74e-b2b947ef6ce0\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"468209d6-fa2e-4278-a5c1-2b39c7b76658\",\"toNode\":\"9a6c6174-9085-4911-85ca-0bce9d910869\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"9a6c6174-9085-4911-85ca-0bce9d910869\",\"toNode\":\"46957f62-90c8-4870-8b8a-11aecba6d9c6\",\"fromSide\":\"right\",\"toSide\":\"left\"}]}', '', 1, 1, 1, '2026-03-06 10:47:19', '2026-03-09 16:26:33', 1, NULL, '');
-INSERT INTO `flow_definition` VALUES (5, '报表灰度发布流程', 'FLOW_1773044848704', '{\"nodes\":[{\"id\":\"211f83f1-71c0-433c-a008-e4a62553fc97\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":100,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"4760a5af-a4b8-4297-93bf-06771e91aef9\",\"name\":\"租户内审批\",\"type\":\"approve\",\"x\":250,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"6\"],\"notifyContent\":\"\",\"moduleCode\":\"C\"},{\"id\":\"6dc540bb-8c9b-4783-a8e2-e218133311f7\",\"name\":\"工作台管理员审批\",\"type\":\"approve\",\"x\":400,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"1\"],\"notifyContent\":\"\",\"moduleCode\":\"A\"},{\"id\":\"25a31487-c17c-41ed-a49d-e56aa5b98166\",\"name\":\"通知节点\",\"type\":\"notify\",\"x\":550,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"1\"],\"notifyContent\":\"请审批\",\"moduleCode\":\"A\"},{\"id\":\"dad7e071-092c-4f08-83b2-0b477d95e5de\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":700,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\",\"moduleCode\":\"A\"}],\"lines\":[{\"fromNode\":\"211f83f1-71c0-433c-a008-e4a62553fc97\",\"toNode\":\"4760a5af-a4b8-4297-93bf-06771e91aef9\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"4760a5af-a4b8-4297-93bf-06771e91aef9\",\"toNode\":\"6dc540bb-8c9b-4783-a8e2-e218133311f7\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"6dc540bb-8c9b-4783-a8e2-e218133311f7\",\"toNode\":\"25a31487-c17c-41ed-a49d-e56aa5b98166\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"25a31487-c17c-41ed-a49d-e56aa5b98166\",\"toNode\":\"dad7e071-092c-4f08-83b2-0b477d95e5de\",\"fromSide\":\"right\",\"toSide\":\"left\"}]}', '', 1, 1, 1, '2026-03-09 16:27:29', '2026-03-10 09:40:05', 1, '0', 'C');
-INSERT INTO `flow_definition` VALUES (6, '申请工作台角色流程', 'FLOW_1773045521360', '{\"nodes\":[{\"id\":\"d02f4398-ce74-4cc2-8e4b-fe5327e6e05e\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":100,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"e3ebce0f-7390-4c3f-bbca-d3d93e0c1b6c\",\"name\":\"通知节点\",\"type\":\"notify\",\"x\":250,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"87e72c45-8eff-45b7-85ee-9341b023134d\",\"name\":\"审批节点\",\"type\":\"approve\",\"x\":400,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"67d2f296-8212-4464-be92-11fa93b3fbb3\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":550,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"}],\"lines\":[{\"fromNode\":\"d02f4398-ce74-4cc2-8e4b-fe5327e6e05e\",\"toNode\":\"e3ebce0f-7390-4c3f-bbca-d3d93e0c1b6c\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"e3ebce0f-7390-4c3f-bbca-d3d93e0c1b6c\",\"toNode\":\"87e72c45-8eff-45b7-85ee-9341b023134d\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"87e72c45-8eff-45b7-85ee-9341b023134d\",\"toNode\":\"67d2f296-8212-4464-be92-11fa93b3fbb3\",\"fromSide\":\"right\",\"toSide\":\"left\"}]}', '', 1, 1, 1, '2026-03-09 16:38:41', '2026-03-09 16:44:40', 1, NULL, '');
-INSERT INTO `flow_definition` VALUES (7, '申请租户角色权限流程', 'FLOW_1773047413234', '{\"nodes\":[{\"id\":\"3b8484a7-afbf-4dd8-9a9d-97a4a8861c4f\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":100,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"},{\"id\":\"089e5e00-af89-4d71-b0ec-b60d8b89a594\",\"name\":\"租户内审批\",\"type\":\"approve\",\"x\":249,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"6\"],\"notifyContent\":\"\",\"moduleCode\":\"C\",\"nodeKey\":\"TENANT_SHENPO\",\"customFields\":[]},{\"id\":\"dedbc889-1ea0-45f2-8729-c40dfa9041a4\",\"name\":\"通知节点\",\"type\":\"notify\",\"x\":400,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\",\"nodeKey\":\"notice\",\"moduleCode\":\"C\",\"customFields\":[]},{\"id\":\"38f261f0-f8d9-4edc-9cee-32b1055c11de\",\"name\":\"工作台管理员审批\",\"type\":\"approve\",\"x\":550,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"1\"],\"notifyContent\":\"\",\"moduleCode\":\"A\",\"nodeKey\":\"bi_shenpi\",\"customFields\":[]},{\"id\":\"7953b6b1-239b-4913-8fac-a0262a8300fa\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":700,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\"}],\"lines\":[{\"fromNode\":\"3b8484a7-afbf-4dd8-9a9d-97a4a8861c4f\",\"toNode\":\"089e5e00-af89-4d71-b0ec-b60d8b89a594\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"089e5e00-af89-4d71-b0ec-b60d8b89a594\",\"toNode\":\"dedbc889-1ea0-45f2-8729-c40dfa9041a4\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"dedbc889-1ea0-45f2-8729-c40dfa9041a4\",\"toNode\":\"38f261f0-f8d9-4edc-9cee-32b1055c11de\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"38f261f0-f8d9-4edc-9cee-32b1055c11de\",\"toNode\":\"7953b6b1-239b-4913-8fac-a0262a8300fa\",\"fromSide\":\"right\",\"toSide\":\"left\"}]}', '', 1, 1, 1, '2026-03-09 17:10:13', '2026-03-09 17:10:13', 0, '1', 'C');
-INSERT INTO `flow_definition` VALUES (8, '报表灰度发布流程', 'REPORT_RELEASE', '{\"nodes\":[{\"id\":\"cbaa0c7a-a71a-4f65-afd0-3e88ee163d4d\",\"name\":\"开始节点\",\"type\":\"start\",\"x\":-7,\"y\":202,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\",\"customFields\":[],\"nodeKey\":\"\",\"moduleCode\":\"C\"},{\"id\":\"80bc6b97-9702-4a5f-b8de-540722bc2aaa\",\"name\":\"租户内审批\",\"type\":\"approve\",\"x\":266,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"6\"],\"notifyContent\":\"\",\"customFields\":[],\"moduleCode\":\"C\",\"nodeKey\":\"TENANT_PROCESS\"},{\"id\":\"2c45ee26-8a37-451d-ae14-98b3542a6686\",\"name\":\"通知节点\",\"type\":\"notify\",\"x\":400,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"1\"],\"notifyContent\":\"请审批\",\"customFields\":[],\"moduleCode\":\"A\",\"nodeKey\":\"NOTICE\"},{\"id\":\"bc106c12-5901-49a9-b30c-7122d14460ca\",\"name\":\"系统管理员审批\",\"type\":\"approve\",\"x\":550,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[\"1\"],\"notifyContent\":\"\",\"customFields\":[],\"moduleCode\":\"A\",\"nodeKey\":\"BI_PROCESS\"},{\"id\":\"a22bcf2a-d8ea-4248-b950-934f9352ea87\",\"name\":\"结束节点\",\"type\":\"end\",\"x\":700,\"y\":200,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\",\"customFields\":[],\"nodeKey\":\"\",\"moduleCode\":\"A\"},{\"id\":\"149e1c05-cca0-439d-a96c-46c75d8ab8a3\",\"name\":\"灰度发布内容\",\"type\":\"text\",\"x\":126,\"y\":199,\"handlerType\":\"role\",\"handlerIds\":[],\"notifyContent\":\"\",\"customFields\":[{\"fieldName\":\"REPORT_GREY_URL\",\"fieldLabel\":\"灰度验证url\"}],\"moduleCode\":\"C\",\"nodeKey\":\"CONTENT\"}],\"lines\":[{\"fromNode\":\"80bc6b97-9702-4a5f-b8de-540722bc2aaa\",\"toNode\":\"2c45ee26-8a37-451d-ae14-98b3542a6686\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"2c45ee26-8a37-451d-ae14-98b3542a6686\",\"toNode\":\"bc106c12-5901-49a9-b30c-7122d14460ca\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"bc106c12-5901-49a9-b30c-7122d14460ca\",\"toNode\":\"a22bcf2a-d8ea-4248-b950-934f9352ea87\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"cbaa0c7a-a71a-4f65-afd0-3e88ee163d4d\",\"toNode\":\"149e1c05-cca0-439d-a96c-46c75d8ab8a3\",\"fromSide\":\"right\",\"toSide\":\"left\"},{\"fromNode\":\"149e1c05-cca0-439d-a96c-46c75d8ab8a3\",\"toNode\":\"80bc6b97-9702-4a5f-b8de-540722bc2aaa\",\"fromSide\":\"right\",\"toSide\":\"left\"}]}', '', 1, 1, 1, '2026-03-10 09:45:41', '2026-03-10 09:45:41', 0, '0', 'C');
 
 -- ----------------------------
 -- Table structure for flow_instance
@@ -58,18 +47,6 @@ CREATE TABLE `flow_instance`  (
   INDEX `idx_status`(`status`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程实例表' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of flow_instance
--- ----------------------------
-INSERT INTO `flow_instance` VALUES (1, 8, '公共租户报表发布', 1, 1, 'approve_2', '租户内审批', 4, '2026-03-10 09:47:54', '2026-03-10 09:47:54', 0, '', '', '');
-INSERT INTO `flow_instance` VALUES (2, 8, '模拟报表灰度发布', 1, 1, 'approve_2', '租户内审批', 0, '2026-03-10 10:21:14', '2026-03-10 10:21:14', 0, '', '', '');
-INSERT INTO `flow_instance` VALUES (3, 8, '模拟报表灰度', 1, 1, 'end_5', '结束节点', 1, '2026-03-10 10:34:39', '2026-03-10 10:34:39', 0, '', '', '');
-INSERT INTO `flow_instance` VALUES (4, 8, '公共租户模拟报表灰度发布', 1, 1, 'end_5', '结束节点', 1, '2026-03-16 16:08:11', '2026-03-16 16:08:11', 0, '', '', '');
-INSERT INTO `flow_instance` VALUES (5, 8, '模拟灰度发布流程', 1, 1, 'approve_2', '租户内审批', 0, '2026-03-17 14:53:51', '2026-03-17 14:53:51', 0, '', '', '');
-INSERT INTO `flow_instance` VALUES (6, 8, '报表发布', 1, 1, 'TENANT_PROCESS', '租户内审批', 0, '2026-03-17 15:19:59', '2026-03-17 15:19:59', 0, '', '', '');
-INSERT INTO `flow_instance` VALUES (7, 7, '申请角色', 1, 1, 'TENANT_SHENPO', '租户内审批', 0, '2026-03-17 16:39:18', '2026-03-17 16:39:18', 0, '/api/files/20260317/941fbe9fdfbb442fb78f1409041e9706.pdf', '2.pdf', '');
-INSERT INTO `flow_instance` VALUES (8, 7, '申请租户角色', 1, 1, 'end_5', '结束节点', 1, '2026-03-17 16:46:04', '2026-03-17 16:46:04', 0, '/api/files/20260317/261e44e85e8f4594996c74ccfa27006e.pdf', '2.pdf', '');
-
 
 -- ----------------------------
 -- Table structure for flow_instance_param
@@ -87,13 +64,6 @@ CREATE TABLE `flow_instance_param`  (
   INDEX `idx_param_code`(`param_code`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程实例参数值表' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of flow_instance_param
--- ----------------------------
-INSERT INTO `flow_instance_param` VALUES (1, 5, 7, 'REPORT_CODE', 'ZH_00001234', NULL);
-INSERT INTO `flow_instance_param` VALUES (2, 6, 7, 'REPORT_CODE', 'ZH_000000000', NULL);
-INSERT INTO `flow_instance_param` VALUES (3, 7, 9, 'ROLE_TYPE', '6', NULL);
-INSERT INTO `flow_instance_param` VALUES (4, 8, 9, 'ROLE_TYPE', '19', '数据集管理员');
 
 -- ----------------------------
 -- Table structure for flow_node_config
@@ -112,25 +82,14 @@ CREATE TABLE `flow_node_config`  (
   `notify_content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '通知内容（仅notify节点）',
   `sort` int(11) NULL DEFAULT 0 COMMENT '节点排序（决定执行顺序）',
   `custom_fields` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '自定义字段配置（JSON格式）',
+  `execute_modules` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '审批后调用模块编码，多个逗号分隔',
+  `enable_notify` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '0' COMMENT '是否开启通知（0否，1是，仅approve节点）',
+  `notify_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '畅聊' COMMENT '通知方式（畅聊/邮件/知会，仅enable_notify=1时生效）',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_flow_node`(`flow_id`, `node_key`) USING BTREE,
   INDEX `idx_flow_id`(`flow_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 182 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程节点配置表' ROW_FORMAT = Compact;
+) ENGINE = InnoDB AUTO_INCREMENT = 182 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程节点配置表（enable_notify/notify_type用于approve节点的通知属性）' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of flow_node_config
--- ----------------------------
-INSERT INTO `flow_node_config` VALUES (171, 'cbaa0c7a-a71a-4f65-afd0-3e88ee163d4d', 8, 'start_1', '开始节点', 'start', 'role', '', 'C', '', 1, '[]');
-INSERT INTO `flow_node_config` VALUES (172, '149e1c05-cca0-439d-a96c-46c75d8ab8a3', 8, 'CONTENT', '灰度发布内容', 'text', 'role', '', 'C', '', 2, '[{\"fieldName\":\"REPORT_GREY_URL\",\"fieldLabel\":\"灰度验证url\"}]');
-INSERT INTO `flow_node_config` VALUES (173, '80bc6b97-9702-4a5f-b8de-540722bc2aaa', 8, 'TENANT_PROCESS', '租户内审批', 'approve', 'role', '6', 'C', '', 3, '[]');
-INSERT INTO `flow_node_config` VALUES (174, '2c45ee26-8a37-451d-ae14-98b3542a6686', 8, 'NOTICE', '通知节点', 'notify', 'role', '1', 'A', '请审批', 4, '[]');
-INSERT INTO `flow_node_config` VALUES (175, 'bc106c12-5901-49a9-b30c-7122d14460ca', 8, 'BI_PROCESS', '系统管理员审批', 'approve', 'role', '1', 'A', '', 5, '[]');
-INSERT INTO `flow_node_config` VALUES (176, 'a22bcf2a-d8ea-4248-b950-934f9352ea87', 8, 'end_5', '结束节点', 'end', 'role', '', 'A', '', 6, '[]');
-INSERT INTO `flow_node_config` VALUES (177, '3b8484a7-afbf-4dd8-9a9d-97a4a8861c4f', 7, 'start_1', '开始节点', 'start', 'role', '', '', '', 1, '');
-INSERT INTO `flow_node_config` VALUES (178, '089e5e00-af89-4d71-b0ec-b60d8b89a594', 7, 'TENANT_SHENPO', '租户内审批', 'approve', 'role', '6', 'C', '', 2, '[]');
-INSERT INTO `flow_node_config` VALUES (179, 'dedbc889-1ea0-45f2-8729-c40dfa9041a4', 7, 'notice', '通知节点', 'notify', 'role', '', 'C', '', 3, '[]');
-INSERT INTO `flow_node_config` VALUES (180, '38f261f0-f8d9-4edc-9cee-32b1055c11de', 7, 'bi_shenpi', '工作台管理员审批', 'approve', 'role', '1', 'A', '', 4, '[]');
-INSERT INTO `flow_node_config` VALUES (181, '7953b6b1-239b-4913-8fac-a0262a8300fa', 7, 'end_5', '结束节点', 'end', 'role', '', '', '', 5, '');
 
 -- ----------------------------
 -- Table structure for flow_operation_log
@@ -148,84 +107,6 @@ CREATE TABLE `flow_operation_log`  (
   INDEX `idx_instance_id`(`instance_id`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 76 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程操作日志表' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of flow_operation_log
--- ----------------------------
-INSERT INTO `flow_operation_log` VALUES (1, 1, 1, 'admin', 'init', '用户admin发起流程：模拟公共租户发起流程', '2026-03-09 16:04:57');
-INSERT INTO `flow_operation_log` VALUES (2, 1, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-09 16:04:57');
-INSERT INTO `flow_operation_log` VALUES (3, 1, NULL, '', 'complete', '流程到达结束节点，状态改为已完成', '2026-03-09 16:04:57');
-INSERT INTO `flow_operation_log` VALUES (4, 2, 1, 'admin', 'init', '用户admin发起流程：公共报表审批流程', '2026-03-09 16:26:23');
-INSERT INTO `flow_operation_log` VALUES (5, 2, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-09 16:26:23');
-INSERT INTO `flow_operation_log` VALUES (6, 2, NULL, '', 'complete', '流程到达结束节点，状态改为已完成', '2026-03-09 16:26:23');
-INSERT INTO `flow_operation_log` VALUES (7, 3, 1, 'admin', 'init', '用户admin发起流程：公共租户发布报表13', '2026-03-09 16:27:54');
-INSERT INTO `flow_operation_log` VALUES (8, 3, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-09 16:27:54');
-INSERT INTO `flow_operation_log` VALUES (9, 3, NULL, '', 'init', '审批节点[审批节点]已分配处理人：角色：租户管理员', '2026-03-09 16:27:54');
-INSERT INTO `flow_operation_log` VALUES (10, 3, 1, 'admin', 'approve', '用户admin对节点[审批节点]审批通过，意见：通过', '2026-03-09 16:29:07');
-INSERT INTO `flow_operation_log` VALUES (11, 3, NULL, '', 'init', '审批节点[审批节点]已分配处理人：角色：BI工作台超管', '2026-03-09 16:29:07');
-INSERT INTO `flow_operation_log` VALUES (12, 3, 1, 'admin', 'approve', '用户admin对节点[审批节点]审批通过，意见：通过', '2026-03-09 16:29:33');
-INSERT INTO `flow_operation_log` VALUES (13, 3, NULL, '', 'notify', '【流程通知】节点：通知节点，通知对象：角色：BI工作台超管，内容：请审批', '2026-03-09 16:29:33');
-INSERT INTO `flow_operation_log` VALUES (14, 3, NULL, '', 'complete', '流程到达结束节点，状态改为已完成', '2026-03-09 16:29:33');
-INSERT INTO `flow_operation_log` VALUES (15, 4, 1, 'admin', 'init', '用户admin发起流程：cmm发布报表', '2026-03-09 16:31:26');
-INSERT INTO `flow_operation_log` VALUES (16, 4, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-09 16:31:26');
-INSERT INTO `flow_operation_log` VALUES (17, 4, NULL, '', 'init', '审批节点[审批节点]已分配处理人：无', '2026-03-09 16:31:26');
-INSERT INTO `flow_operation_log` VALUES (18, 4, 1, 'admin', 'cancel', '用户撤销流程', '2026-03-09 16:31:51');
-INSERT INTO `flow_operation_log` VALUES (19, 5, 1, 'admin', 'init', '用户admin发起流程：cmm发布报表', '2026-03-09 16:32:28');
-INSERT INTO `flow_operation_log` VALUES (20, 5, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-09 16:32:28');
-INSERT INTO `flow_operation_log` VALUES (21, 5, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：无', '2026-03-09 16:32:28');
-INSERT INTO `flow_operation_log` VALUES (22, 6, 1, 'admin', 'init', '用户admin发起流程：申请租户角色权限', '2026-03-09 18:20:16');
-INSERT INTO `flow_operation_log` VALUES (23, 6, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-09 18:20:16');
-INSERT INTO `flow_operation_log` VALUES (24, 6, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-09 18:20:16');
-INSERT INTO `flow_operation_log` VALUES (25, 6, 1, 'admin', 'approve', '用户admin对节点[租户内审批]审批通过，意见：通过', '2026-03-09 18:23:09');
-INSERT INTO `flow_operation_log` VALUES (26, 6, NULL, '', 'notify', '【流程通知】节点：通知节点，通知对象：无，内容：', '2026-03-09 18:23:09');
-INSERT INTO `flow_operation_log` VALUES (27, 6, NULL, '', 'init', '审批节点[工作台管理员审批]已分配处理人：角色：BI工作台超管', '2026-03-09 18:23:09');
-INSERT INTO `flow_operation_log` VALUES (28, 7, 1, 'admin', 'init', '用户admin发起流程：灰度发布报表', '2026-03-09 18:30:23');
-INSERT INTO `flow_operation_log` VALUES (29, 7, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-09 18:30:23');
-INSERT INTO `flow_operation_log` VALUES (30, 7, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-09 18:30:23');
-INSERT INTO `flow_operation_log` VALUES (31, 1, 1, 'admin', 'init', '用户admin发起流程：公共租户报表发布', '2026-03-10 09:47:54');
-INSERT INTO `flow_operation_log` VALUES (32, 1, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-10 09:47:54');
-INSERT INTO `flow_operation_log` VALUES (33, 1, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-10 09:47:54');
-INSERT INTO `flow_operation_log` VALUES (34, 1, 1, 'admin', 'terminate', '管理员终止流程', '2026-03-10 10:13:15');
-INSERT INTO `flow_operation_log` VALUES (35, 2, 1, 'admin', 'init', '用户admin发起流程：模拟报表灰度发布', '2026-03-10 10:21:14');
-INSERT INTO `flow_operation_log` VALUES (36, 2, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-10 10:21:14');
-INSERT INTO `flow_operation_log` VALUES (37, 2, NULL, '', 'pass', '文本节点[文本节点]自动通过', '2026-03-10 10:21:14');
-INSERT INTO `flow_operation_log` VALUES (38, 2, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-10 10:21:14');
-INSERT INTO `flow_operation_log` VALUES (39, 3, 1, 'admin', 'init', '用户admin发起流程：模拟报表灰度', '2026-03-10 10:34:39');
-INSERT INTO `flow_operation_log` VALUES (40, 3, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-10 10:34:39');
-INSERT INTO `flow_operation_log` VALUES (41, 3, NULL, '', 'pass', '文本节点[文本节点]自动通过', '2026-03-10 10:34:39');
-INSERT INTO `flow_operation_log` VALUES (42, 3, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-10 10:34:39');
-INSERT INTO `flow_operation_log` VALUES (43, 3, 1, 'admin', 'approve', '用户admin对节点[租户内审批]审批通过，意见：通过', '2026-03-10 15:38:37');
-INSERT INTO `flow_operation_log` VALUES (44, 3, NULL, '', 'notify', '【流程通知】节点：通知节点，通知对象：角色：BI工作台超管，内容：请审批', '2026-03-10 15:38:37');
-INSERT INTO `flow_operation_log` VALUES (45, 3, NULL, '', 'init', '审批节点[系统管理员审批]已分配处理人：角色：BI工作台超管', '2026-03-10 15:38:37');
-INSERT INTO `flow_operation_log` VALUES (46, 3, 1, 'admin', 'approve', '用户admin对节点[系统管理员审批]审批通过，意见：通过', '2026-03-16 16:06:22');
-INSERT INTO `flow_operation_log` VALUES (47, 3, NULL, '', 'complete', '流程到达结束节点，状态改为已完成', '2026-03-16 16:06:22');
-INSERT INTO `flow_operation_log` VALUES (48, 4, 1, 'admin', 'init', '用户admin发起流程：公共租户模拟报表灰度发布', '2026-03-16 16:08:11');
-INSERT INTO `flow_operation_log` VALUES (49, 4, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-16 16:08:11');
-INSERT INTO `flow_operation_log` VALUES (50, 4, NULL, '', 'pass', '文本节点[灰度发布内容]自动通过', '2026-03-16 16:08:11');
-INSERT INTO `flow_operation_log` VALUES (51, 4, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-16 16:08:11');
-INSERT INTO `flow_operation_log` VALUES (52, 4, 1, 'admin', 'approve', '用户admin对节点[租户内审批]审批通过，意见：通过', '2026-03-16 16:08:47');
-INSERT INTO `flow_operation_log` VALUES (53, 4, NULL, '', 'notify', '【流程通知】节点：通知节点，通知对象：角色：BI工作台超管，内容：请审批', '2026-03-16 16:08:47');
-INSERT INTO `flow_operation_log` VALUES (54, 4, NULL, '', 'init', '审批节点[系统管理员审批]已分配处理人：角色：BI工作台超管', '2026-03-16 16:08:47');
-INSERT INTO `flow_operation_log` VALUES (55, 4, 1, 'admin', 'approve', '用户admin对节点[系统管理员审批]审批通过，意见：通过', '2026-03-16 16:08:54');
-INSERT INTO `flow_operation_log` VALUES (56, 4, NULL, '', 'complete', '流程到达结束节点，状态改为已完成', '2026-03-16 16:08:54');
-INSERT INTO `flow_operation_log` VALUES (57, 5, 1, 'admin', 'init', '用户admin发起流程：模拟灰度发布流程', '2026-03-17 14:53:51');
-INSERT INTO `flow_operation_log` VALUES (58, 5, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-17 14:53:51');
-INSERT INTO `flow_operation_log` VALUES (59, 5, NULL, '', 'pass', '文本节点[灰度发布内容]自动通过', '2026-03-17 14:53:51');
-INSERT INTO `flow_operation_log` VALUES (60, 5, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-17 14:53:51');
-INSERT INTO `flow_operation_log` VALUES (61, 6, 1, 'admin', 'init', '用户admin发起流程：报表发布', '2026-03-17 15:19:59');
-INSERT INTO `flow_operation_log` VALUES (62, 6, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-17 15:19:59');
-INSERT INTO `flow_operation_log` VALUES (63, 6, NULL, '', 'pass', '文本节点[灰度发布内容]自动通过', '2026-03-17 15:19:59');
-INSERT INTO `flow_operation_log` VALUES (64, 6, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-17 15:19:59');
-INSERT INTO `flow_operation_log` VALUES (65, 7, 1, 'admin', 'init', '用户admin发起流程：申请角色', '2026-03-17 16:39:18');
-INSERT INTO `flow_operation_log` VALUES (66, 7, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-17 16:39:18');
-INSERT INTO `flow_operation_log` VALUES (67, 7, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-17 16:39:18');
-INSERT INTO `flow_operation_log` VALUES (68, 8, 1, 'admin', 'init', '用户admin发起流程：申请租户角色', '2026-03-17 16:46:04');
-INSERT INTO `flow_operation_log` VALUES (69, 8, NULL, '', 'notify', '开始节点自动触发，流转至下一个节点', '2026-03-17 16:46:04');
-INSERT INTO `flow_operation_log` VALUES (70, 8, NULL, '', 'init', '审批节点[租户内审批]已分配处理人：角色：租户管理员', '2026-03-17 16:46:04');
-INSERT INTO `flow_operation_log` VALUES (71, 8, 1, 'admin', 'approve', '用户admin对节点[租户内审批]审批通过，意见：', '2026-03-17 16:50:27');
-INSERT INTO `flow_operation_log` VALUES (72, 8, NULL, '', 'notify', '【流程通知】节点：通知节点，通知对象：无，内容：', '2026-03-17 16:50:27');
-INSERT INTO `flow_operation_log` VALUES (73, 8, NULL, '', 'init', '审批节点[工作台管理员审批]已分配处理人：角色：BI工作台超管', '2026-03-17 16:50:27');
-INSERT INTO `flow_operation_log` VALUES (74, 8, 1, 'admin', 'approve', '用户admin对节点[工作台管理员审批]审批通过，意见：', '2026-03-17 16:50:48');
-INSERT INTO `flow_operation_log` VALUES (75, 8, NULL, '', 'complete', '流程到达结束节点，状态改为已完成', '2026-03-17 16:50:48');
 
 -- ----------------------------
 -- Table structure for flow_task
@@ -242,60 +123,19 @@ CREATE TABLE `flow_task`  (
   `action` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '操作类型（approve/reject/notify/auto）',
   `comment` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '审批意见/通知内容',
   `execute_time` datetime NULL DEFAULT NULL COMMENT '任务执行时间',
-  `status` tinyint(4) NULL DEFAULT 0 COMMENT '任务状态（0待处理1已完成2已驳回）',
+  `status` tinyint(4) NULL DEFAULT 0 COMMENT '任务状态（0待处理1已完成2已驳回3业务执行中4逻辑处理失败）',
+  `callback_token` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '回调令牌（用于外部模块回调验证）',
+  `execute_log` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '外部模块执行日志（JSON格式，支持追加）',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   `deleted` tinyint(4) NULL DEFAULT 0,
   `custom_field_values` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '自定义字段值（JSON格式）',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_instance_id`(`instance_id`) USING BTREE,
   INDEX `idx_handler_id`(`handler_id`) USING BTREE,
-  INDEX `idx_node_type`(`node_type`) USING BTREE
+  INDEX `idx_node_type`(`node_type`) USING BTREE,
+  INDEX `idx_callback_token`(`callback_token`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 67 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程任务表' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of flow_task
--- ----------------------------
-INSERT INTO `flow_task` VALUES (26, 1, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-10 09:47:54', 1, '2026-03-10 09:47:54', 0, NULL);
-INSERT INTO `flow_task` VALUES (27, 1, 'approve_2', '租户内审批', 'approve', 1, 'admin', '', NULL, NULL, 0, '2026-03-10 09:47:54', 0, NULL);
-INSERT INTO `flow_task` VALUES (28, 2, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-10 10:21:14', 1, '2026-03-10 10:21:14', 0, NULL);
-INSERT INTO `flow_task` VALUES (29, 2, 'approve_2', '租户内审批', 'approve', 1, 'admin', '', NULL, NULL, 0, '2026-03-10 10:21:14', 0, NULL);
-INSERT INTO `flow_task` VALUES (30, 3, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-10 10:34:39', 1, '2026-03-10 10:34:39', 0, NULL);
-INSERT INTO `flow_task` VALUES (31, 3, 'text_6', '文本节点', 'text', NULL, '系统自动', 'auto', '文本节点自动通过', '2026-03-10 10:34:39', 1, '2026-03-10 10:34:39', 0, '{\"REPORT_GREY_URL\":\"https://gray.example.com/report/fb1683b2\"}');
-INSERT INTO `flow_task` VALUES (32, 3, 'approve_2', '租户内审批', 'approve', 1, 'admin', 'approve', '通过', '2026-03-10 15:38:37', 1, '2026-03-10 10:34:39', 0, NULL);
-INSERT INTO `flow_task` VALUES (33, 3, 'notify_3', '通知节点', 'notify', NULL, '系统自动', 'notify', '请审批', '2026-03-10 15:38:37', 1, '2026-03-10 15:38:37', 0, NULL);
-INSERT INTO `flow_task` VALUES (34, 3, 'approve_4', '系统管理员审批', 'approve', 1, 'admin', 'approve', '通过', '2026-03-16 16:06:21', 1, '2026-03-10 15:38:37', 0, NULL);
-INSERT INTO `flow_task` VALUES (35, 3, 'approve_4', '系统管理员审批', 'approve', 2, 'userA', '', NULL, NULL, 0, '2026-03-10 15:38:37', 0, NULL);
-INSERT INTO `flow_task` VALUES (36, 3, 'approve_4', '系统管理员审批', 'approve', 3, 'userB', '', NULL, NULL, 0, '2026-03-10 15:38:37', 0, NULL);
-INSERT INTO `flow_task` VALUES (37, 3, 'approve_4', '系统管理员审批', 'approve', 4, 'userC', '', NULL, NULL, 0, '2026-03-10 15:38:37', 0, NULL);
-INSERT INTO `flow_task` VALUES (38, 3, 'approve_4', '系统管理员审批', 'approve', 5, 'gggg', '', NULL, NULL, 0, '2026-03-10 15:38:37', 0, NULL);
-INSERT INTO `flow_task` VALUES (39, 3, 'end_5', '结束节点', 'end', NULL, '系统自动', 'auto', '流程完成', '2026-03-16 16:06:22', 1, '2026-03-16 16:06:22', 0, NULL);
-INSERT INTO `flow_task` VALUES (40, 4, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-16 16:08:11', 1, '2026-03-16 16:08:11', 0, NULL);
-INSERT INTO `flow_task` VALUES (41, 4, 'text_6', '灰度发布内容', 'text', NULL, '系统自动', 'auto', '文本节点自动通过', '2026-03-16 16:08:11', 1, '2026-03-16 16:08:11', 0, '{\"REPORT_GREY_URL\":\"https://gray.example.com/report/a2c781f4\"}');
-INSERT INTO `flow_task` VALUES (42, 4, 'approve_2', '租户内审批', 'approve', 1, 'admin', 'approve', '通过', '2026-03-16 16:08:47', 1, '2026-03-16 16:08:11', 0, NULL);
-INSERT INTO `flow_task` VALUES (43, 4, 'notify_3', '通知节点', 'notify', NULL, '系统自动', 'notify', '请审批', '2026-03-16 16:08:47', 1, '2026-03-16 16:08:47', 0, NULL);
-INSERT INTO `flow_task` VALUES (44, 4, 'approve_4', '系统管理员审批', 'approve', 1, 'admin', 'approve', '通过', '2026-03-16 16:08:54', 1, '2026-03-16 16:08:47', 0, NULL);
-INSERT INTO `flow_task` VALUES (45, 4, 'approve_4', '系统管理员审批', 'approve', 2, 'userA', '', NULL, NULL, 0, '2026-03-16 16:08:47', 0, NULL);
-INSERT INTO `flow_task` VALUES (46, 4, 'approve_4', '系统管理员审批', 'approve', 3, 'userB', '', NULL, NULL, 0, '2026-03-16 16:08:47', 0, NULL);
-INSERT INTO `flow_task` VALUES (47, 4, 'approve_4', '系统管理员审批', 'approve', 4, 'userC', '', NULL, NULL, 0, '2026-03-16 16:08:47', 0, NULL);
-INSERT INTO `flow_task` VALUES (48, 4, 'approve_4', '系统管理员审批', 'approve', 5, 'gggg', '', NULL, NULL, 0, '2026-03-16 16:08:47', 0, NULL);
-INSERT INTO `flow_task` VALUES (49, 4, 'end_5', '结束节点', 'end', NULL, '系统自动', 'auto', '流程完成', '2026-03-16 16:08:54', 1, '2026-03-16 16:08:54', 0, NULL);
-INSERT INTO `flow_task` VALUES (50, 5, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-17 14:53:51', 1, '2026-03-17 14:53:51', 0, NULL);
-INSERT INTO `flow_task` VALUES (51, 5, 'text_6', '灰度发布内容', 'text', NULL, '系统自动', 'auto', '文本节点自动通过', '2026-03-17 14:53:51', 1, '2026-03-17 14:53:51', 0, '{\"REPORT_GREY_URL\":\"https://gray.example.com/report/a18bae74\"}');
-INSERT INTO `flow_task` VALUES (52, 5, 'approve_2', '租户内审批', 'approve', 1, 'admin', '', NULL, NULL, 0, '2026-03-17 14:53:51', 0, NULL);
-INSERT INTO `flow_task` VALUES (53, 6, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-17 15:19:59', 1, '2026-03-17 15:19:59', 0, NULL);
-INSERT INTO `flow_task` VALUES (54, 6, 'CONTENT', '灰度发布内容', 'text', NULL, '系统自动', 'auto', '文本节点自动通过', '2026-03-17 15:19:59', 1, '2026-03-17 15:19:59', 0, '{\"REPORT_GREY_URL\":\"https://gray.example.com/report/9a03e7ec\"}');
-INSERT INTO `flow_task` VALUES (55, 6, 'TENANT_PROCESS', '租户内审批', 'approve', 1, 'admin', '', NULL, NULL, 0, '2026-03-17 15:19:59', 0, NULL);
-INSERT INTO `flow_task` VALUES (56, 7, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-17 16:39:18', 1, '2026-03-17 16:39:18', 0, NULL);
-INSERT INTO `flow_task` VALUES (57, 7, 'TENANT_SHENPO', '租户内审批', 'approve', 1, 'admin', '', NULL, NULL, 0, '2026-03-17 16:39:18', 0, NULL);
-INSERT INTO `flow_task` VALUES (58, 8, 'start_1', '开始节点', 'start', NULL, '系统自动', 'auto', '开始节点自动执行', '2026-03-17 16:46:04', 1, '2026-03-17 16:46:04', 0, NULL);
-INSERT INTO `flow_task` VALUES (59, 8, 'TENANT_SHENPO', '租户内审批', 'approve', 1, 'admin', 'approve', '', '2026-03-17 16:50:27', 1, '2026-03-17 16:46:04', 0, NULL);
-INSERT INTO `flow_task` VALUES (60, 8, 'notice', '通知节点', 'notify', NULL, '系统自动', 'notify', '', '2026-03-17 16:50:27', 1, '2026-03-17 16:50:27', 0, NULL);
-INSERT INTO `flow_task` VALUES (61, 8, 'bi_shenpi', '工作台管理员审批', 'approve', 1, 'admin', 'approve', '', '2026-03-17 16:50:48', 1, '2026-03-17 16:50:27', 0, NULL);
-INSERT INTO `flow_task` VALUES (62, 8, 'bi_shenpi', '工作台管理员审批', 'approve', 2, 'userA', '', NULL, NULL, 0, '2026-03-17 16:50:27', 0, NULL);
-INSERT INTO `flow_task` VALUES (63, 8, 'bi_shenpi', '工作台管理员审批', 'approve', 3, 'userB', '', NULL, NULL, 0, '2026-03-17 16:50:27', 0, NULL);
-INSERT INTO `flow_task` VALUES (64, 8, 'bi_shenpi', '工作台管理员审批', 'approve', 4, 'userC', '', NULL, NULL, 0, '2026-03-17 16:50:27', 0, NULL);
-INSERT INTO `flow_task` VALUES (65, 8, 'bi_shenpi', '工作台管理员审批', 'approve', 5, 'gggg', '', NULL, NULL, 0, '2026-03-17 16:50:27', 0, NULL);
-INSERT INTO `flow_task` VALUES (66, 8, 'end_5', '结束节点', 'end', NULL, '系统自动', 'auto', '流程完成', '2026-03-17 16:50:48', 1, '2026-03-17 16:50:48', 0, NULL);
 
 -- ----------------------------
 -- Table structure for flow_template_param
@@ -316,11 +156,6 @@ CREATE TABLE `flow_template_param`  (
   INDEX `idx_param_code`(`param_code`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 10 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程模板参数配置表' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of flow_template_param
--- ----------------------------
-INSERT INTO `flow_template_param` VALUES (7, 8, 'REPORT_CODE', '报表编码', 'input', 1, '', '', NULL);
-INSERT INTO `flow_template_param` VALUES (9, 7, 'ROLE_TYPE', '角色类型', 'select', 1, '', '[{\"label\":\"分行审批员\",\"value\":\"20\"},\n{\"label\":\"数据集管理员\",\"value\":\"19\"},\n{\"label\":\"租户管理员\",\"value\":\"6\"},\n{\"label\":\"产品设计员\",\"value\":\"8\"}]', NULL);
 
 -- ----------------------------
 -- Table structure for sys_api
@@ -397,25 +232,6 @@ CREATE TABLE `sys_asset`  (
   INDEX `idx_module_code`(`module_code`) USING BTREE COMMENT '模块索引'
 ) ENGINE = InnoDB AUTO_INCREMENT = 17 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '资产库表' ROW_FORMAT = Compact;
 
--- ----------------------------
--- Records of sys_asset
--- ----------------------------
-INSERT INTO `sys_asset` VALUES (1, 'A', '模块A-设备001', 'ASSET-A-001', '设备', '模块A的通用设备', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (2, 'A', '模块A-设备002', 'ASSET-A-002', '设备', '模块A的通用设备', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (3, 'A', '模块A-权限001', 'ASSET-A-003', '权限', '模块A的管理权限', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (4, 'A', '模块A-权限002', 'ASSET-A-004', '权限', '模块A的操作权限', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (5, 'A', '模块A-资源001', 'ASSET-A-005', '资源', '模块A的业务资源', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (6, 'A', '模块A-资源002', 'ASSET-A-006', '资源', '模块A的数据资源', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (7, 'B', '模块B-设备001', 'ASSET-B-001', '设备', '模块B的通用设备', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (8, 'B', '模块B-设备002', 'ASSET-B-002', '设备', '模块B的通用设备', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (9, 'B', '模块B-权限001', 'ASSET-B-003', '权限', '模块B的管理权限', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (10, 'B', '模块B-权限002', 'ASSET-B-004', '权限', '模块B的操作权限', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (11, 'B', '模块B-资源001', 'ASSET-B-005', '资源', '模块B的业务资源', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (12, 'C', '模块C-设备001', 'ASSET-C-001', '设备', '模块C的通用设备', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (13, 'C', '模块C-设备002', 'ASSET-C-002', '设备', '模块C的通用设备', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (14, 'C', '模块C-权限001', 'ASSET-C-003', '权限', '模块C的只读权限', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (15, 'C', '模块C-权限002', 'ASSET-C-004', '权限', '模块C的操作权限', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
-INSERT INTO `sys_asset` VALUES (16, 'C', '模块C-资源001', 'ASSET-C-005', '资源', '模块C的业务资源', 1, '2026-02-28 10:15:25', '2026-02-28 10:15:25', 0);
 
 -- ----------------------------
 -- Table structure for sys_menu
@@ -622,67 +438,6 @@ CREATE TABLE `sys_role_api`  (
   INDEX `idx_api_id`(`api_id`) USING BTREE,
   INDEX `idx_module_code`(`module_code`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 102 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '角色接口关联表' ROW_FORMAT = Compact;
-
--- ----------------------------
--- Records of sys_role_api
--- ----------------------------
-INSERT INTO `sys_role_api` VALUES (1, 1, 25, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (2, 1, 26, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (3, 1, 27, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (4, 1, 28, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (5, 1, 29, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (6, 1, 30, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (7, 1, 31, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (8, 1, 32, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (9, 1, 33, NULL, '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (10, 1, 1, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (11, 1, 2, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (12, 1, 3, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (13, 1, 4, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (14, 1, 5, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (15, 1, 6, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (16, 1, 7, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (17, 1, 8, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (18, 1, 9, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (19, 1, 10, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (20, 1, 11, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (21, 1, 12, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (22, 1, 13, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (23, 1, 14, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (24, 1, 15, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (25, 1, 16, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (26, 1, 17, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (27, 1, 18, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (28, 1, 19, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (29, 1, 20, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (30, 1, 21, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (31, 1, 22, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (32, 1, 23, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (33, 1, 24, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (64, 2, 1, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (65, 2, 2, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (66, 2, 3, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (67, 2, 4, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (68, 2, 5, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (69, 2, 6, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (70, 2, 7, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (71, 2, 8, 'A', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (79, 3, 9, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (80, 3, 10, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (81, 3, 11, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (82, 3, 12, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (83, 3, 13, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (84, 3, 14, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (85, 3, 15, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (86, 3, 16, 'B', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (94, 4, 17, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (95, 4, 18, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (96, 4, 19, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (97, 4, 20, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (98, 4, 21, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (99, 4, 22, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (100, 4, 23, 'C', '2026-02-24 19:01:07');
-INSERT INTO `sys_role_api` VALUES (101, 4, 24, 'C', '2026-02-24 19:01:07');
 
 
 -- ----------------------------
@@ -956,24 +711,6 @@ CREATE TABLE `sys_user_asset`  (
   UNIQUE INDEX `uk_user_asset`(`user_id`, `asset_id`) USING BTREE COMMENT '用户+资产唯一索引',
   INDEX `idx_user_module`(`user_id`, `module_code`) USING BTREE COMMENT '用户+模块索引'
 ) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '用户资产关联表' ROW_FORMAT = Compact;
-
--- ----------------------------
--- Records of sys_user_asset
--- ----------------------------
-INSERT INTO `sys_user_asset` VALUES (1, 1, 1, 'A', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (2, 1, 3, 'A', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (3, 1, 5, 'A', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (4, 1, 7, 'B', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (5, 1, 11, 'B', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (6, 1, 12, 'C', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (7, 2, 2, 'A', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (8, 2, 4, 'A', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (9, 2, 6, 'A', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (10, 3, 8, 'B', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (11, 3, 10, 'B', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (12, 3, 11, 'B', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (13, 4, 13, 'C', '2026-02-28 10:15:25');
-INSERT INTO `sys_user_asset` VALUES (14, 4, 14, 'C', '2026-02-28 10:15:25');
 
 
 -- ----------------------------

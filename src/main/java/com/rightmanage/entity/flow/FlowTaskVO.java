@@ -25,4 +25,5 @@ public class FlowTaskVO {
     private Date executeTime;
     private Date createTime; // 任务创建时间（到达时间）
     private Integer status;
+    private String executeLog; // 外部模块执行日志
 }
