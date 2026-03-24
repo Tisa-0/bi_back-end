@@ -57,4 +57,7 @@ public class FlowTask implements Serializable {
 
     // 自定义字段值（JSON格式：{fieldName: "value", ...}）
     private String customFieldValues;
+
+    // 该任务的租户ID（多租户审批节点有效，标记该任务属于哪个租户）
+    private Long tenantId;
 }

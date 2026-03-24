@@ -26,4 +26,6 @@ public class FlowTaskVO {
     private Date createTime; // 任务创建时间（到达时间）
     private Integer status;
     private String executeLog; // 外部模块执行日志
+    private Long tenantId; // 多租户审批节点的任务归属租户ID
+    private String tenantName; // 多租户审批节点的任务归属租户名称
 }

@@ -47,6 +47,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private static final Logger log = LoggerFactory.getLogger(FlowInstanceServiceImpl.class);
 
     private final ThreadLocal<Map<String, DynamicHandlerDTO>> dynamicHandlerThreadLocal = new ThreadLocal<>();
+    // 多租户审批节点：发起时选择的租户ID列表
+    private final ThreadLocal<List<Long>> nodeTenantsThreadLocal = new ThreadLocal<>();
 
     private static final Map<String, TaskCallbackContext> callbackTokenMap = new ConcurrentHashMap<>();
 
@@ -187,11 +189,20 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
         dynamicHandlerThreadLocal.set(dynamicHandlerMap);
 
+        // 解析多租户审批节点的租户列表，并存入 ThreadLocal
+        List<Long> nodeTenants = dto.getNodeTenants();
+        if (nodeTenants != null && !nodeTenants.isEmpty()) {
+            System.out.println("===== [多租户审批] 选择的租户 =====");
+            System.out.println("  租户IDs: " + nodeTenants);
+            System.out.println("========================================");
+        }
+        nodeTenantsThreadLocal.set(nodeTenants != null ? nodeTenants : new ArrayList<>());
+
         SysUser applicant = sysUserService.getById(userId);
 
         boolean needTenant = flowDefinitionService.checkFlowNeedTenant(dto.getFlowId());
-        if (needTenant && dto.getTenantId() == null) {
-            throw new RuntimeException("该流程包含产品智能定制审批节点，必须选择租户");
+        if (needTenant && (nodeTenants == null || nodeTenants.isEmpty())) {
+            throw new RuntimeException("该流程包含多租户审批节点，必须选择至少一个租户");
         }
 
         if (flow.getNeedAttachment() != null && flow.getNeedAttachment() == 1) {
@@ -215,9 +226,15 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             instance.setExtraInfo("请访问灰度发布链接：" + randomUrl);
         }
 
-        if (dto.getDynamicHandlers() != null && !dto.getDynamicHandlers().isEmpty()) {
+        if (dto.getDynamicHandlers() != null && !dto.getDynamicHandlers().isEmpty() || (dto.getNodeTenants() != null && !dto.getNodeTenants().isEmpty())) {
             try {
-                instance.setDynamicHandlers(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(dto.getDynamicHandlers()));
+                // 动态处理人和多租户审批节点租户列表统一存储在一个 JSON 对象中
+                Map<String, Object> extraData = new HashMap<>();
+                extraData.put("dynamicHandlers", dto.getDynamicHandlers());
+                if (dto.getNodeTenants() != null && !dto.getNodeTenants().isEmpty()) {
+                    extraData.put("nodeTenants", dto.getNodeTenants());
+                }
+                instance.setDynamicHandlers(objectMapper.writeValueAsString(extraData));
             } catch (Exception e) {
                 log.error("保存动态处理人信息失败", e);
             }
@@ -320,6 +337,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         dynamicHandlerThreadLocal.remove();
+        nodeTenantsThreadLocal.remove();
         return instance.getId();
     }
 
@@ -531,13 +549,60 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     /**
      * 创建审批任务
      */
-    private void createApprovalTasks(FlowInstance instance, FlowNodeConfig node, 
+    private void createApprovalTasks(FlowInstance instance, FlowNodeConfig node,
             Map<String, DynamicHandlerDTO> dynamicHandlerMap) {
-        
-        String handlerIds = getRealHandlerIds(node, instance.getTenantId(), dynamicHandlerMap);
+
+        // 判断该节点是否为多租户审批（审批人模块是 multiTenant=1 且 handlerType=role）
+        List<Long> selectedTenants = null;
+        boolean isMultiTenantNode = "role".equals(node.getHandlerType())
+                && sysModuleService.isMultiTenant(node.getModuleCode());
+
+        if (isMultiTenantNode) {
+            selectedTenants = nodeTenantsThreadLocal.get();
+            if (selectedTenants == null || selectedTenants.isEmpty()) {
+                System.out.println("createApprovalTasks - 警告：节点 " + node.getNodeKey() + " 是多租户审批节点，但未传入租户选择");
+                logService.saveLog(instance.getId(), null, null,
+                        FlowOperationType.INIT.getCode(),
+                        "审批节点[" + node.getNodeName() + "]是多租户审批节点，但未选择租户，无法分配处理人");
+                return;
+            }
+            System.out.println("createApprovalTasks - 多租户审批节点[" + node.getNodeKey() + "]，选择的租户: " + selectedTenants);
+        }
+
+        // 收集所有符合条件的处理人及其归属租户
+        Set<String> allHandlerIds = new HashSet<>();
+        Map<String, Long> handlerTenantMap = new HashMap<>(); // handlerId -> tenantId
+
+        if (isMultiTenantNode) {
+            // 多租户审批：每个租户单独查，再合并
+            for (Long tenantId : selectedTenants) {
+                String handlerIds = getRealHandlerIds(node, tenantId, dynamicHandlerMap);
+                if (StringUtils.hasText(handlerIds)) {
+                    for (String hid : handlerIds.split(",")) {
+                        if (StringUtils.hasText(hid)) {
+                            allHandlerIds.add(hid.trim());
+                            handlerTenantMap.put(hid.trim(), tenantId);
+                        }
+                    }
+                }
+            }
+        } else {
+            // 非多租户审批：使用流程实例的租户
+            String handlerIds = getRealHandlerIds(node, instance.getTenantId(), dynamicHandlerMap);
+            if (StringUtils.hasText(handlerIds)) {
+                for (String hid : handlerIds.split(",")) {
+                    if (StringUtils.hasText(hid)) {
+                        allHandlerIds.add(hid.trim());
+                        handlerTenantMap.put(hid.trim(), instance.getTenantId());
+                    }
+                }
+            }
+        }
+
+        String handlerIds = String.join(",", allHandlerIds);
         String handlerNames = getHandlerNames(node, handlerIds, dynamicHandlerMap);
-        
-        if (handlerIds == null || handlerIds.isEmpty()) {
+
+        if (allHandlerIds.isEmpty()) {
             System.out.println("createApprovalTasks - 警告：节点 " + node.getNodeKey() + " 没有处理人");
             logService.saveLog(instance.getId(), null, null,
                     FlowOperationType.INIT.getCode(),
@@ -547,30 +612,30 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         System.out.println("createApprovalTasks - handlerIds: " + handlerIds + ", handlerNames: " + handlerNames);
 
-        for (String handlerId : handlerIds.split(",")) {
-            if (!StringUtils.hasText(handlerId)) continue;
-
+        for (String handlerId : allHandlerIds) {
             // 幂等检查：如果该 handler 的任务已存在，不再重复创建
             Long existingCount = flowTaskMapper.selectCount(
                     new LambdaQueryWrapper<FlowTask>()
                             .eq(FlowTask::getInstanceId, instance.getId())
                             .eq(FlowTask::getNodeKey, node.getNodeKey())
-                            .eq(FlowTask::getHandlerId, Long.parseLong(handlerId.trim()))
+                            .eq(FlowTask::getHandlerId, Long.parseLong(handlerId))
                             .eq(FlowTask::getDeleted, 0)
             );
             if (existingCount != null && existingCount > 0) {
                 continue;
             }
 
-            SysUser handler = sysUserService.getById(Long.parseLong(handlerId.trim()));
+            SysUser handler = sysUserService.getById(Long.parseLong(handlerId));
             FlowTask task = new FlowTask();
             task.setInstanceId(instance.getId());
             task.setNodeKey(node.getNodeKey());
             task.setNodeName(node.getNodeName());
             task.setNodeType(node.getNodeType());
-            task.setHandlerId(Long.parseLong(handlerId.trim()));
+            task.setHandlerId(Long.parseLong(handlerId));
             task.setHandlerName(handler != null ? handler.getUsername() : "");
             task.setStatus(0); // 待处理
+            // 多租户审批节点：记录该用户归属的租户ID，用于过滤"我的审批"
+            task.setTenantId(handlerTenantMap.get(handlerId));
             flowTaskMapper.insert(task);
         }
 
@@ -1524,11 +1589,26 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         String dynamicHandlersJson = instance.getDynamicHandlers();
         if (StringUtils.hasText(dynamicHandlersJson)) {
             try {
-                List<DynamicHandlerDTO> handlers = objectMapper.readValue(dynamicHandlersJson,
-                        new TypeReference<List<DynamicHandlerDTO>>() {});
-                if (handlers != null) {
-                    for (DynamicHandlerDTO handler : handlers) {
-                        dynamicHandlerMap.put(handler.getNodeKey(), handler);
+                // 尝试解析为包含 dynamicHandlers 和 nodeTenants 的对象
+                Map<String, Object> extraData = objectMapper.readValue(dynamicHandlersJson,
+                        new TypeReference<Map<String, Object>>() {});
+                if (extraData != null && extraData.containsKey("dynamicHandlers")) {
+                    @SuppressWarnings("unchecked")
+                    List<DynamicHandlerDTO> handlers = objectMapper.convertValue(extraData.get("dynamicHandlers"),
+                            new TypeReference<List<DynamicHandlerDTO>>() {});
+                    if (handlers != null) {
+                        for (DynamicHandlerDTO handler : handlers) {
+                            dynamicHandlerMap.put(handler.getNodeKey(), handler);
+                        }
+                    }
+                } else {
+                    // 兼容旧格式：直接是数组
+                    List<DynamicHandlerDTO> handlers = objectMapper.readValue(dynamicHandlersJson,
+                            new TypeReference<List<DynamicHandlerDTO>>() {});
+                    if (handlers != null) {
+                        for (DynamicHandlerDTO handler : handlers) {
+                            dynamicHandlerMap.put(handler.getNodeKey(), handler);
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -1538,9 +1618,35 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         return dynamicHandlerMap;
     }
 
+    /**
+     * 从流程实例的 dynamicHandlers 字段恢复 nodeTenants 并设置到 ThreadLocal
+     */
+    private void restoreAndSetNodeTenantSelections(FlowInstance instance) {
+        String dynamicHandlersJson = instance.getDynamicHandlers();
+        if (StringUtils.hasText(dynamicHandlersJson)) {
+            try {
+                Map<String, Object> extraData = objectMapper.readValue(dynamicHandlersJson,
+                        new TypeReference<Map<String, Object>>() {});
+                if (extraData != null && extraData.containsKey("nodeTenants")) {
+                    @SuppressWarnings("unchecked")
+                    List<Long> nodeTenants = objectMapper.convertValue(extraData.get("nodeTenants"),
+                            new TypeReference<List<Long>>() {});
+                    nodeTenantsThreadLocal.set(nodeTenants != null ? nodeTenants : new ArrayList<>());
+                    System.out.println("===== [多租户审批] 审批时恢复租户列表 =====");
+                    System.out.println("  租户IDs: " + nodeTenantsThreadLocal.get());
+                    return;
+                }
+            } catch (Exception e) {
+                log.error("恢复节点租户列表失败", e);
+            }
+        }
+        nodeTenantsThreadLocal.set(new ArrayList<>());
+    }
+
     private void loadDynamicHandlersToThreadLocal(FlowInstance instance) {
         Map<String, DynamicHandlerDTO> dynamicHandlerMap = restoreDynamicHandlerMap(instance);
         dynamicHandlerThreadLocal.set(dynamicHandlerMap);
+        restoreAndSetNodeTenantSelections(instance);
     }
 
     @Override
@@ -1667,21 +1773,31 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     public IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, Long tenantId, Long flowId, Integer pageNum, Integer pageSize) {
         Page<FlowTask> page = new Page<>(pageNum, pageSize);
 
+        // 多租户过滤：如果传了 tenantId（前端指定了要查看的租户），只看该租户的任务
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
                 .eq(FlowTask::getHandlerId, userId)
                 .eq(FlowTask::getStatus, taskStatus)
-                .eq(FlowTask::getDeleted, 0)
-                .orderByDesc(FlowTask::getCreateTime);
+                .eq(FlowTask::getDeleted, 0);
+        if (tenantId != null) {
+            wrapper.and(w -> w.eq(FlowTask::getTenantId, tenantId).or().isNull(FlowTask::getTenantId));
+        }
+        wrapper.orderByDesc(FlowTask::getCreateTime);
 
         IPage<FlowTask> taskPage = flowTaskMapper.selectPage(page, wrapper);
         List<FlowTask> taskList = taskPage.getRecords();
 
+        // 按模块/流程进一步过滤（用于前端筛选展示）
         if ((moduleCode != null && !moduleCode.isEmpty()) || tenantId != null || flowId != null) {
             List<FlowTask> filteredTasks = new ArrayList<>();
             for (FlowTask t : taskList) {
                 FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
                 if (inst != null) {
-                    if (tenantId != null && !tenantId.equals(inst.getTenantId())) {
+                    // 多租户审批节点过滤：有效租户 = 任务自己的租户 > 实例的租户
+                    Long effectiveTenantId = t.getTenantId();
+                    if (effectiveTenantId == null) {
+                        effectiveTenantId = inst.getTenantId();
+                    }
+                    if (tenantId != null && !tenantId.equals(effectiveTenantId)) {
                         continue;
                     }
                     FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
@@ -1712,6 +1828,16 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
                 SysUser applicant = sysUserService.getById(inst.getApplicantId());
                 vo.setApplicantName(applicant != null ? applicant.getUsername() : "");
+
+                // 填充租户名称（优先用任务自己的租户ID，其次用实例的租户ID）
+                Long effectiveTenantId = t.getTenantId();
+                if (effectiveTenantId == null || effectiveTenantId == 0) {
+                    effectiveTenantId = inst.getTenantId();
+                }
+                if (effectiveTenantId != null) {
+                    SysTenant tenant = sysTenantService.getById(effectiveTenantId);
+                    vo.setTenantName(tenant != null ? tenant.getTenantName() : "");
+                }
             }
 
             vo.setCurrentNodeName(t.getNodeName());
@@ -2343,36 +2469,89 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             return "当前节点未开启通知功能";
         }
 
+        // 恢复动态处理人和多租户审批节点租户列表
         Map<String, DynamicHandlerDTO> dynamicHandlerMap = new HashMap<>();
+        List<Long> nodeTenants = new ArrayList<>();
         if (StringUtils.hasText(instance.getDynamicHandlers())) {
             try {
-                List<DynamicHandlerDTO> handlers = objectMapper.readValue(
+                Map<String, Object> extraData = objectMapper.readValue(
                         instance.getDynamicHandlers(),
-                        objectMapper.getTypeFactory().constructCollectionType(List.class, DynamicHandlerDTO.class)
-                );
-                for (DynamicHandlerDTO handler : handlers) {
-                    dynamicHandlerMap.put(handler.getNodeKey(), handler);
+                        new TypeReference<Map<String, Object>>() {});
+                if (extraData != null) {
+                    if (extraData.containsKey("dynamicHandlers")) {
+                        @SuppressWarnings("unchecked")
+                        List<DynamicHandlerDTO> handlers = objectMapper.convertValue(extraData.get("dynamicHandlers"),
+                                new TypeReference<List<DynamicHandlerDTO>>() {});
+                        if (handlers != null) {
+                            for (DynamicHandlerDTO handler : handlers) {
+                                dynamicHandlerMap.put(handler.getNodeKey(), handler);
+                            }
+                        }
+                    }
+                    if (extraData.containsKey("nodeTenants")) {
+                        @SuppressWarnings("unchecked")
+                        List<Long> nts = objectMapper.convertValue(extraData.get("nodeTenants"),
+                                new TypeReference<List<Long>>() {});
+                        if (nts != null) {
+                            nodeTenants = nts;
+                        }
+                    }
                 }
             } catch (Exception e) {
-                log.warn("解析动态处理人信息失败: {}", e.getMessage());
+                log.warn("解析动态处理人/租户信息失败: {}", e.getMessage());
             }
         }
 
-        String handlerIds = getRealHandlerIds(currentNode, instance.getTenantId(), dynamicHandlerMap);
+        // 判断当前节点是否为多租户审批节点
+        boolean isMultiTenantNode = "role".equals(currentNode.getHandlerType())
+                && sysModuleService.isMultiTenant(currentNode.getModuleCode());
+
+        // 收集通知人（多租户节点：所有选中租户的用户；普通节点：实例租户的用户）
+        Set<String> allHandlerIds = new HashSet<>();
+        if (isMultiTenantNode && !nodeTenants.isEmpty()) {
+            for (Long tenantId : nodeTenants) {
+                String handlerIds = getRealHandlerIds(currentNode, tenantId, dynamicHandlerMap);
+                if (StringUtils.hasText(handlerIds)) {
+                    for (String hid : handlerIds.split(",")) {
+                        if (StringUtils.hasText(hid)) {
+                            allHandlerIds.add(hid.trim());
+                        }
+                    }
+                }
+            }
+        } else {
+            String handlerIds = getRealHandlerIds(currentNode, instance.getTenantId(), dynamicHandlerMap);
+            if (StringUtils.hasText(handlerIds)) {
+                for (String hid : handlerIds.split(",")) {
+                    if (StringUtils.hasText(hid)) {
+                        allHandlerIds.add(hid.trim());
+                    }
+                }
+            }
+        }
+
+        String handlerIds = String.join(",", allHandlerIds);
         String handlerNames = getHandlerNames(currentNode, handlerIds, dynamicHandlerMap);
 
         String handlerTypeText = "role".equals(currentNode.getHandlerType()) ? "按角色" : ("user".equals(currentNode.getHandlerType()) ? "按用户" : "动态用户");
         String notifyContent = currentNode.getNotifyContent() != null ? currentNode.getNotifyContent() : "";
         String notifyTypeText = currentNode.getNotifyType() != null ? currentNode.getNotifyType() : "未配置";
 
-        String tenantInfo = "无";
-        if (instance.getTenantId() != null) {
+        // 租户信息（多租户节点显示所选租户，普通节点显示实例租户）
+        String tenantInfo;
+        if (isMultiTenantNode && !nodeTenants.isEmpty()) {
+            String names = nodeTenants.stream().map(tid -> {
+                SysTenant t = sysTenantService.getById(tid);
+                return t != null ? t.getTenantName() : ("ID=" + tid);
+            }).collect(Collectors.joining("、"));
+            tenantInfo = "多租户审批，所选租户: " + names;
+        } else if (instance.getTenantId() != null) {
             SysTenant tenant = sysTenantService.getById(instance.getTenantId());
-            if (tenant != null) {
-                tenantInfo = "租户ID: " + tenant.getId() + "，租户名称: " + tenant.getTenantName() + "，租户编码: " + tenant.getTenantCode();
-            } else {
-                tenantInfo = "租户ID: " + instance.getTenantId() + "（租户信息未找到）";
-            }
+            tenantInfo = tenant != null
+                    ? "租户ID: " + tenant.getId() + "，租户名称: " + tenant.getTenantName()
+                    : "租户ID: " + instance.getTenantId() + "（未找到）";
+        } else {
+            tenantInfo = "无";
         }
 
         String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());

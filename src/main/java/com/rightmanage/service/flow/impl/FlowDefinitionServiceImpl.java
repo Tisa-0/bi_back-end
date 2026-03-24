@@ -11,6 +11,7 @@ import com.rightmanage.enums.FlowNodeType;
 import com.rightmanage.mapper.flow.FlowDefinitionMapper;
 import com.rightmanage.mapper.flow.FlowNodeConfigMapper;
 import com.rightmanage.service.flow.FlowDefinitionService;
+import com.rightmanage.service.SysModuleService;
 import com.rightmanage.service.SysUserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,8 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     private FlowNodeConfigMapper flowNodeConfigMapper;
     @Autowired
     private SysUserService sysUserService;
+    @Autowired
+    private SysModuleService sysModuleService;
 
     @Override
     public void saveFlowDefinition(FlowDefinitionDetailDTO dto, Long userId) {
@@ -319,7 +322,7 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     }
 
     /**
-     * 检查流程是否需要租户（判断是否包含产品智能定制模块的角色）
+     * 检查流程是否需要租户（判断是否包含多租户审批节点：handlerType=role 且审批人模块 orgRelated=true）
      */
     @Override
     public boolean checkFlowNeedTenant(Long flowId) {
@@ -330,9 +333,10 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
 
         for (FlowNodeConfig node : nodes) {
             // 如果是审批节点且处理人类型为角色
-            if ("approve".equals(node.getNodeType()) && "role".equals(node.getHandlerType())) {
-                // 检查是否涉及产品智能定制模块（moduleCode = "bi_wx_product"）
-                if ("bi_wx_product".equals(node.getModuleCode())) {
+            if ("approve".equals(node.getNodeType()) && "role".equals(node.getHandlerType())
+                    && StringUtils.hasText(node.getModuleCode())) {
+                // 检查该模块是否是多租户（orgRelated=true）
+                if (sysModuleService.isMultiTenant(node.getModuleCode())) {
                     return true;
                 }
             }
