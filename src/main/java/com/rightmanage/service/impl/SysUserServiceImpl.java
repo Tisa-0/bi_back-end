@@ -4,14 +4,18 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.rightmanage.entity.BankOrg;
 import com.rightmanage.entity.SysUser;
+import com.rightmanage.entity.SysUserOrgAuth;
 import com.rightmanage.entity.SysUserRole;
 import com.rightmanage.entity.flow.FlowDefinition;
 import com.rightmanage.entity.flow.FlowInstance;
 import com.rightmanage.entity.flow.FlowNodeConfig;
 import com.rightmanage.entity.flow.FlowTask;
 import com.rightmanage.mapper.SysUserMapper;
+import com.rightmanage.mapper.SysUserOrgAuthMapper;
 import com.rightmanage.mapper.SysUserRoleMapper;
+import com.rightmanage.mapper.BankOrgMapper;
 import com.rightmanage.mapper.flow.FlowDefinitionMapper;
 import com.rightmanage.mapper.flow.FlowInstanceMapper;
 import com.rightmanage.mapper.flow.FlowNodeConfigMapper;
@@ -32,6 +36,10 @@ public class SysUserServiceImpl implements SysUserService {
     @Autowired
     private SysUserRoleMapper sysUserRoleMapper;
     @Autowired
+    private SysUserOrgAuthMapper sysUserOrgAuthMapper;
+    @Autowired
+    private BankOrgMapper bankOrgMapper;
+    @Autowired
     private PasswordEncoder passwordEncoder;
     @Autowired
     private FlowDefinitionMapper flowDefinitionMapper;
@@ -41,6 +49,7 @@ public class SysUserServiceImpl implements SysUserService {
     private FlowNodeConfigMapper flowNodeConfigMapper;
     @Autowired
     private FlowTaskMapper flowTaskMapper;
+
     @Override
     public List<SysUser> list() {
         return sysUserMapper.selectList(null);
@@ -195,9 +204,9 @@ public class SysUserServiceImpl implements SysUserService {
                 }
                 if (matchedRoleId == null) continue;
 
-                // 检查该节点是否需要按租户过滤（模块C）
+                // 检查该节点是否需要按租户过滤（模块bi_wx_product）
                 Long effectiveTenantId = null;
-                if ("C".equals(node.getModuleCode()) && tenantId != null) {
+                if ("bi_wx_product".equals(node.getModuleCode()) && tenantId != null) {
                     effectiveTenantId = tenantId;
                 }
 
@@ -239,5 +248,47 @@ public class SysUserServiceImpl implements SysUserService {
                 System.out.println("Assigned pending task to user " + user.getUsername() + " for flow instance " + instance.getId());
             }
         }
+    }
+
+    @Override
+    public BankOrg getAuthorizedOrg(Long userId, String moduleCode, Long tenantId) {
+        LambdaQueryWrapper<SysUserOrgAuth> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysUserOrgAuth::getUserId, userId)
+                .eq(SysUserOrgAuth::getModuleCode, moduleCode);
+
+        if (tenantId == null) {
+            wrapper.isNull(SysUserOrgAuth::getTenantId);
+        } else {
+            wrapper.eq(SysUserOrgAuth::getTenantId, tenantId);
+        }
+
+        wrapper.orderByDesc(SysUserOrgAuth::getId).last("limit 1");
+        SysUserOrgAuth auth = sysUserOrgAuthMapper.selectOne(wrapper);
+        if (auth == null || auth.getOrgId() == null) {
+            return null;
+        }
+        return bankOrgMapper.selectById(auth.getOrgId());
+    }
+
+    @Override
+    @Transactional
+    public boolean bindAuthorizedOrg(Long userId, String moduleCode, Long tenantId, Long orgId) {
+        // 每个 user + module + tenant 只保留一条授权机构记录
+        LambdaQueryWrapper<SysUserOrgAuth> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(SysUserOrgAuth::getUserId, userId)
+                .eq(SysUserOrgAuth::getModuleCode, moduleCode);
+        if (tenantId == null) {
+            deleteWrapper.isNull(SysUserOrgAuth::getTenantId);
+        } else {
+            deleteWrapper.eq(SysUserOrgAuth::getTenantId, tenantId);
+        }
+        sysUserOrgAuthMapper.delete(deleteWrapper);
+
+        SysUserOrgAuth auth = new SysUserOrgAuth();
+        auth.setUserId(userId);
+        auth.setModuleCode(moduleCode);
+        auth.setTenantId(tenantId);
+        auth.setOrgId(orgId);
+        return sysUserOrgAuthMapper.insert(auth) > 0;
     }
 }

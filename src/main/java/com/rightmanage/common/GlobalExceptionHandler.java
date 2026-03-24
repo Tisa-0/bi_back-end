@@ -4,6 +4,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.sql.SQLIntegrityConstraintViolationException;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
@@ -21,5 +23,21 @@ public class GlobalExceptionHandler {
     public Result<?> handleRuntimeException(RuntimeException e) {
         e.printStackTrace();
         return Result.error(e.getMessage());
+    }
+
+    /**
+     * 处理数据库唯一键冲突异常
+     */
+    @ExceptionHandler(SQLIntegrityConstraintViolationException.class)
+    public Result<?> handleSQLIntegrityConstraintViolationException(SQLIntegrityConstraintViolationException e) {
+        String message = e.getMessage();
+        if (message != null && message.contains("uk_flow_code")) {
+            return Result.error("流程编码已存在，请使用其他编码");
+        }
+        if (message != null && message.contains("Duplicate entry")) {
+            return Result.error("数据重复，请检查后重新提交");
+        }
+        e.printStackTrace();
+        return Result.error("数据保存失败：" + message);
     }
 }

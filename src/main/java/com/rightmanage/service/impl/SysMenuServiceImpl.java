@@ -32,7 +32,7 @@ public class SysMenuServiceImpl implements SysMenuService {
     /**
      * 产品智能定制模块编码
      */
-    private static final String PRODUCT_CUSTOM_MODULE_CODE = "C";
+    private static final String PRODUCT_CUSTOM_MODULE_CODE = "bi_wx_product";
 
     @Autowired
     private SysMenuMapper sysMenuMapper;

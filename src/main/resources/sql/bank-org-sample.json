@@ -1,0 +1,153 @@
+[
+  {
+    "id": 1,
+    "parentId": 0,
+    "name": "中国工商银行总行",
+    "code": "ICBC001",
+    "level": 1,
+    "children": [
+      {
+        "id": 10,
+        "parentId": 1,
+        "name": "北京市分行",
+        "code": "ICBC1100",
+        "level": 2,
+        "children": [
+          {
+            "id": 101,
+            "parentId": 10,
+            "name": "北京朝阳分行",
+            "code": "ICBC1101",
+            "level": 3,
+            "children": [
+              { "id": 1011, "parentId": 101, "name": "北京朝阳建国路支行", "code": "ICBC110101", "level": 4 },
+              { "id": 1012, "parentId": 101, "name": "北京朝阳国贸支行", "code": "ICBC110102", "level": 4 }
+            ]
+          },
+          {
+            "id": 102,
+            "parentId": 10,
+            "name": "北京海淀分行",
+            "code": "ICBC1102",
+            "level": 3,
+            "children": [
+              { "id": 1021, "parentId": 102, "name": "北京海淀中关村支行", "code": "ICBC110201", "level": 4 },
+              { "id": 1022, "parentId": 102, "name": "北京海淀西二旗支行", "code": "ICBC110202", "level": 4 }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "parentId": 1,
+        "name": "上海市分行",
+        "code": "ICBC3100",
+        "level": 2,
+        "children": [
+          {
+            "id": 111,
+            "parentId": 11,
+            "name": "上海浦东分行",
+            "code": "ICBC3101",
+            "level": 3,
+            "children": [
+              { "id": 1111, "parentId": 111, "name": "上海浦东陆家嘴支行", "code": "ICBC310101", "level": 4 },
+              { "id": 1112, "parentId": 111, "name": "上海浦东张江支行", "code": "ICBC310102", "level": 4 }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "parentId": 1,
+        "name": "广东省分行",
+        "code": "ICBC4400",
+        "level": 2,
+        "children": [
+          {
+            "id": 121,
+            "parentId": 12,
+            "name": "广州分行",
+            "code": "ICBC4401",
+            "level": 3,
+            "children": [
+              { "id": 1211, "parentId": 121, "name": "广州天河支行", "code": "ICBC440101", "level": 4 },
+              { "id": 1212, "parentId": 121, "name": "广州越秀支行", "code": "ICBC440102", "level": 4 }
+            ]
+          },
+          {
+            "id": 122,
+            "parentId": 12,
+            "name": "深圳分行",
+            "code": "ICBC4403",
+            "level": 3,
+            "children": [
+              { "id": 1221, "parentId": 122, "name": "深圳福田支行", "code": "ICBC440301", "level": 4 },
+              { "id": 1222, "parentId": 122, "name": "深圳南山支行", "code": "ICBC440302", "level": 4 }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "parentId": 1,
+        "name": "江苏省分行",
+        "code": "ICBC3200",
+        "level": 2,
+        "children": [
+          {
+            "id": 131,
+            "parentId": 13,
+            "name": "南京分行",
+            "code": "ICBC3201",
+            "level": 3,
+            "children": [
+              { "id": 1311, "parentId": 131, "name": "南京玄武支行", "code": "ICBC320101", "level": 4 },
+              { "id": 1312, "parentId": 131, "name": "南京鼓楼支行", "code": "ICBC320102", "level": 4 }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "parentId": 1,
+        "name": "浙江省分行",
+        "code": "ICBC3300",
+        "level": 2,
+        "children": [
+          {
+            "id": 141,
+            "parentId": 14,
+            "name": "杭州分行",
+            "code": "ICBC3301",
+            "level": 3,
+            "children": [
+              { "id": 1411, "parentId": 141, "name": "杭州西湖支行", "code": "ICBC330101", "level": 4 },
+              { "id": 1412, "parentId": 141, "name": "杭州滨江支行", "code": "ICBC330102", "level": 4 }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "parentId": 1,
+        "name": "四川省分行",
+        "code": "ICBC5100",
+        "level": 2,
+        "children": [
+          {
+            "id": 151,
+            "parentId": 15,
+            "name": "成都分行",
+            "code": "ICBC5101",
+            "level": 3,
+            "children": [
+              { "id": 1511, "parentId": 151, "name": "成都锦江支行", "code": "ICBC510101", "level": 4 },
+              { "id": 1512, "parentId": 151, "name": "成都青羊支行", "code": "ICBC510102", "level": 4 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

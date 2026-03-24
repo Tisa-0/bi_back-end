@@ -16,8 +16,6 @@ public class SysTenant implements Serializable {
 
     private String tenantCode;
 
-    private String moduleCode;
-
     private Integer status;
 
     @TableField(fill = FieldFill.INSERT)

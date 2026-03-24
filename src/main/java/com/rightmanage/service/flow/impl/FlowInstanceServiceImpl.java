@@ -18,6 +18,7 @@ import com.rightmanage.service.flow.FlowOperationLogService;
 import com.rightmanage.service.SysUserService;
 import com.rightmanage.service.SysRoleService;
 import com.rightmanage.service.SysTenantService;
+import com.rightmanage.service.SysModuleService;
 import com.rightmanage.enums.*;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
@@ -132,6 +133,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     @Autowired
     private SysTenantService sysTenantService;
     @Autowired
+    private SysModuleService sysModuleService;
+    @Autowired
     private FlowTemplateParamMapper flowTemplateParamMapper;
     @Autowired
     private FlowInstanceParamMapper flowInstanceParamMapper;
@@ -140,6 +143,16 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private FlowCommonService flowCommonService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * 判断是否是多租户模块
+     */
+    private boolean isMultiTenantModule(String moduleCode) {
+        if (moduleCode == null || moduleCode.isEmpty()) {
+            return false;
+        }
+        return sysModuleService.isMultiTenant(moduleCode);
+    }
 
     @Override
     public List<FlowInstance> list() {
@@ -231,22 +244,29 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 FlowJsonData flowJsonData = objectMapper.readValue(flow.getFlowJson(), FlowJsonData.class);
                 if (flowJsonData != null && flowJsonData.getLines() != null) {
                     flowLines = flowJsonData.getLines();
-                    System.out.println("解析 flowJson 连线信息，共 " + flowLines.size() + " 条连线");
+                    System.out.println("===== [调试] 解析 flowJson 连线信息，共 " + flowLines.size() + " 条连线 =====");
+                    for (int i = 0; i < flowLines.size(); i++) {
+                        FlowLine fl = flowLines.get(i);
+                        System.out.println("  连线" + i + ": fromNode=" + fl.getFromNode() + ", toNode=" + fl.getToNode());
+                    }
                 }
             } catch (Exception e) {
                 log.warn("解析 flowJson 失败，使用 sort 顺序作为兼容模式", e);
             }
         }
 
-        // 构建节点映射：nodeKey -> FlowNodeConfig 和 id -> FlowNodeConfig
+        // 构建节点映射：nodeKey -> FlowNodeConfig 和 uuid -> FlowNodeConfig
         Map<String, FlowNodeConfig> nodeKeyMap = new HashMap<>();
         Map<String, FlowNodeConfig> nodeIdMap = new HashMap<>();
+        System.out.println("===== [调试] 构建节点映射 =====");
         for (FlowNodeConfig node : nodeConfigs) {
             nodeKeyMap.put(node.getNodeKey(), node);
             if (StringUtils.hasText(node.getUuid())) {
                 nodeIdMap.put(node.getUuid(), node);
             }
+            System.out.println("  节点: nodeKey=" + node.getNodeKey() + ", uuid=" + node.getUuid() + ", type=" + node.getNodeType());
         }
+        System.out.println("  nodeIdMap 大小: " + nodeIdMap.size() + ", nodeKeyMap 大小: " + nodeKeyMap.size());
 
         // 找到开始节点
         FlowNodeConfig startNode = null;
@@ -306,42 +326,70 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     /**
      * 【核心】根据连线查找当前节点的所有后续节点（支持并行分支）
      */
-    private List<FlowNodeConfig> findNextNodesByLines(FlowNodeConfig currentNode, 
+    private List<FlowNodeConfig> findNextNodesByLines(FlowNodeConfig currentNode,
             List<FlowNodeConfig> allNodes, List<FlowLine> flowLines,
             Map<String, FlowNodeConfig> nodeKeyMap, Map<String, FlowNodeConfig> nodeIdMap) {
-        
+
         List<FlowNodeConfig> nextNodes = new ArrayList<>();
-        
+
         // 获取当前节点的标识（可能是 nodeKey 或 uuid）
         String currentKey = currentNode.getNodeKey();
         String currentUuid = currentNode.getUuid();
-        
+
+        System.out.println("===== [调试] findNextNodesByLines =====");
+        System.out.println("  当前节点: nodeKey=[" + currentKey + "], uuid=[" + currentUuid + "], type=[" + currentNode.getNodeType() + "]");
+        System.out.println("  连线总数: " + (flowLines == null ? 0 : flowLines.size()));
+        System.out.println("  nodeIdMap: " + nodeIdMap.keySet());
+        System.out.println("  nodeKeyMap: " + nodeKeyMap.keySet());
+
         if (flowLines == null || flowLines.isEmpty()) {
+            System.out.println("  结果: 连线为空，返回空列表");
             return nextNodes;
         }
 
         // 查找所有以当前节点为起点的连线
         Set<String> addedNodeKeys = new HashSet<>();
-        for (FlowLine line : flowLines) {
+        System.out.println("  开始遍历连线...");
+        for (int i = 0; i < flowLines.size(); i++) {
+            FlowLine line = flowLines.get(i);
             // 匹配起始节点
-            boolean matches = line.getFromNode().equals(currentKey) 
-                    || (currentUuid != null && line.getFromNode().equals(currentUuid));
-            
+            boolean keyMatches = line.getFromNode().equals(currentKey);
+            boolean uuidMatches = currentUuid != null && line.getFromNode().equals(currentUuid);
+            boolean matches = keyMatches || uuidMatches;
+
+            System.out.println("  连线" + i + ": fromNode=" + line.getFromNode() + ", toNode=" + line.getToNode()
+                    + " | keyMatches=" + keyMatches + "(currentKey=[" + currentKey + "]), uuidMatches=" + uuidMatches + "(currentUuid=[" + currentUuid + "])"
+                    + " | 匹配=" + matches);
+
             if (matches) {
                 String targetKey = line.getToNode();
+                System.out.println("  -> 匹配成功! targetKey=" + targetKey);
                 // 如果 target 是 UUID，转为 nodeKey
                 FlowNodeConfig targetNode = nodeIdMap.get(targetKey);
+                System.out.println("  -> nodeIdMap查找: " + (targetNode != null ? "找到 nodeKey=" + targetNode.getNodeKey() : "null"));
                 if (targetNode == null) {
                     targetNode = nodeKeyMap.get(targetKey);
+                    System.out.println("  -> nodeKeyMap查找: " + (targetNode != null ? "找到 nodeKey=" + targetNode.getNodeKey() : "null"));
                 }
-                
-                if (targetNode != null && !addedNodeKeys.contains(targetNode.getNodeKey())) {
-                    nextNodes.add(targetNode);
-                    addedNodeKeys.add(targetNode.getNodeKey());
+
+                if (targetNode != null) {
+                    if (!addedNodeKeys.contains(targetNode.getNodeKey())) {
+                        nextNodes.add(targetNode);
+                        addedNodeKeys.add(targetNode.getNodeKey());
+                        System.out.println("  -> 添加到结果: nodeKey=" + targetNode.getNodeKey() + ", type=" + targetNode.getNodeType());
+                    } else {
+                        System.out.println("  -> 已存在，跳过: nodeKey=" + targetNode.getNodeKey());
+                    }
+                } else {
+                    System.out.println("  -> 未找到对应节点，忽略!");
                 }
             }
         }
 
+        System.out.println("  最终结果: " + nextNodes.size() + " 个后续节点");
+        for (FlowNodeConfig n : nextNodes) {
+            System.out.println("    - " + n.getNodeKey() + " (" + n.getNodeType() + ")");
+        }
         return nextNodes;
     }
 
@@ -394,7 +442,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         if (FlowNodeType.APPROVE.getCode().equals(nodeType)) {
             // 审批节点：创建待办任务
+            // 【重要】审批节点的后续节点不在这里处理！
+            // 审批节点的后续节点应该由 checkLogicNodesAfterApproval 在审批通过后来触发
+            // 这里只创建当前审批节点的任务，不递归处理后续节点
             createApprovalTasks(instance, node, dynamicHandlerMap);
+            System.out.println("processNodeAndChildren - 审批节点[" + node.getNodeKey() + "]任务已创建，等待审批通过后触发后续节点");
+            // 直接返回，不处理后续节点！后续节点由 checkLogicNodesAfterApproval 处理
+            return;
 
         } else if (FlowNodeType.NOTIFY.getCode().equals(nodeType)) {
             // 通知节点：自动触发
@@ -403,11 +457,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     FlowOperationType.NOTIFY.getCode(), "通知节点[" + node.getNodeName() + "]自动执行");
 
         } else if (FlowNodeType.END.getCode().equals(nodeType)) {
-            // 结束节点：创建自动任务，但不立即完成流程
-            // 流程完成检查由 checkLogicNodesAfterApproval 或最后的审批节点通过后统一处理
-            createAutoTask(instance.getId(), node, "auto", "流程结束");
+            // 【修复】结束节点：不立即创建任务，只记录日志
+            // 结束节点的任务应该在所有审批节点完成后，由 checkAndCompleteInstance 统一创建
             logService.saveLog(instance.getId(), null, null,
-                    FlowOperationType.COMPLETE.getCode(), "流程到达结束节点，等待最终完成检查");
+                    FlowOperationType.COMPLETE.getCode(), "流程到达结束节点，等待所有审批节点完成");
+            // 直接返回，不创建任务，不继续处理后续节点
+            return;
 
         } else if (FlowNodeType.TEXT.getCode().equals(nodeType)) {
             // 文本节点：自动通过
@@ -608,8 +663,10 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     || FlowNodeType.LOGIC_OR.getCode().equals(nodeType)) {
                 continue;
             }
-            // status != 1 表示未通过审批
-            if (status != 1) {
+            // 【新增】status = 5（已跳过）视为已完成，不阻塞流程
+            // status = 1 表示已通过，视为完成
+            // 其他状态（0=待处理, 2=驳回, 3=业务执行中, 4=逻辑处理失败）表示未完成
+            if (status != 1 && status != 5) {
                 allCompleted = false;
                 System.out.println("checkAndCompleteInstance - 发现未完成任务: " + nodeKey + ", status=" + status);
                 break;
@@ -625,7 +682,22 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             instance.setCurrentNodeKey("");
             instance.setCurrentNodeName("");
             flowInstanceMapper.updateById(instance);
-            
+
+            // 【修复】创建结束节点的任务（如果不存在）
+            if (endTasks.isEmpty()) {
+                // 获取结束节点配置
+                List<FlowNodeConfig> nodeConfigs = flowNodeConfigMapper.selectList(
+                        new LambdaQueryWrapper<FlowNodeConfig>()
+                                .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                                .eq(FlowNodeConfig::getNodeType, FlowNodeType.END.getCode())
+                );
+                if (!nodeConfigs.isEmpty()) {
+                    FlowNodeConfig endNode = nodeConfigs.get(0);
+                    createAutoTask(instance.getId(), endNode, "auto", "流程结束");
+                    System.out.println("checkAndCompleteInstance - 为结束节点创建任务");
+                }
+            }
+
             // 重新查询验证
             FlowInstance updated = flowInstanceMapper.selectById(instance.getId());
             System.out.println("checkAndCompleteInstance - 更新后流程状态: " + updated.getStatus());
@@ -645,8 +717,6 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         task.setAction(action);
         task.setComment(comment);
         task.setExecuteTime(new Date());
-        task.setStatus("approve".equals(action) ? 1 : 2);
-        flowTaskMapper.updateById(task);
 
         FlowInstance instance = flowInstanceMapper.selectById(task.getInstanceId());
         loadDynamicHandlersToThreadLocal(instance);
@@ -658,23 +728,58 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 action, "用户" + operator.getUsername() + "对节点[" + task.getNodeName() + "]" + actionName + "，意见：" + comment);
 
         System.out.println(">>> approveFlow - 用户[" + operator.getUsername() + "]审批通过节点[" + task.getNodeName()
-                + "(key=" + task.getNodeKey() + ")]，即将调用 checkLogicNodesAfterApproval");
+                + "(key=" + task.getNodeKey() + ")]");
 
         if ("reject".equals(action)) {
             // 驳回：流程终止
+            task.setStatus(2); // 已驳回
+            flowTaskMapper.updateById(task);
             instance.setStatus(FlowInstanceStatus.REJECTED.getCode());
             flowInstanceMapper.updateById(instance);
             dynamicHandlerThreadLocal.remove();
             return;
         }
 
-        // 【修复】审批通过后，清空 currentNodeKey，让后续节点触发时设置正确的值
-        instance.setCurrentNodeKey("");
-        instance.setCurrentNodeName("");
-        flowInstanceMapper.updateById(instance);
+        // 【新增】检查该节点是否配置了业务执行模块
+        FlowNodeConfig nodeConfig = flowNodeConfigMapper.selectOne(
+                new LambdaQueryWrapper<FlowNodeConfig>()
+                        .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                        .eq(FlowNodeConfig::getNodeKey, task.getNodeKey())
+        );
 
-        // 【审批通过】检查后续逻辑节点
-        checkLogicNodesAfterApproval(instance, task);
+        boolean hasExecuteModules = nodeConfig != null
+                && StringUtils.hasText(nodeConfig.getExecuteModules());
+
+        if (hasExecuteModules) {
+            // 【新增】配置了业务执行模块：状态设为"业务执行中"，等待外部回调
+            System.out.println(">>> approveFlow - 节点配置了业务执行模块，进入异步执行模式");
+            task.setStatus(3); // 业务执行中
+            flowTaskMapper.updateById(task);
+
+            // 生成回调令牌
+            String callbackToken = UUID.randomUUID().toString();
+            task.setCallbackToken(callbackToken);
+            flowTaskMapper.updateById(task);
+
+            // 模拟异步调用外部模块
+            executeModuleAsync(nodeConfig.getExecuteModules(), instance, task, operator);
+
+            // 记录日志
+            logService.saveLog(instance.getId(), userId, operator.getUsername(),
+                    "approve", "节点[" + task.getNodeName() + "]审批通过，业务执行中，等待外部模块回调");
+        } else {
+            // 【修复】没有配置业务执行模块：状态直接设为"已通过"
+            task.setStatus(1); // 已通过
+            flowTaskMapper.updateById(task);
+
+            // 【修复】审批通过后，清空 currentNodeKey
+            instance.setCurrentNodeKey("");
+            instance.setCurrentNodeName("");
+            flowInstanceMapper.updateById(instance);
+
+            // 【审批通过】检查后续逻辑节点
+            checkLogicNodesAfterApproval(instance, task);
+        }
 
         dynamicHandlerThreadLocal.remove();
     }
@@ -777,6 +882,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             System.out.println("checkLogicNodesAfterApproval - 条件检查结果: " + canPass);
 
             if (canPass) {
+                // 【新增】如果是逻辑或节点，需要跳过其余并列的审批节点
+                if (FlowNodeType.LOGIC_OR.getCode().equals(logicNode.getNodeType())) {
+                    skipParallelApprovalNodes(instance, logicNode, allNodes, flowLines, nodeKeyMap, nodeIdMap);
+                }
+
                 // 条件满足，流转逻辑节点控制的节点
                 logService.saveLog(instance.getId(), null, null,
                         FlowOperationType.PASS.getCode(),
@@ -806,9 +916,47 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         // 2. fallback：处理不受逻辑节点控制的直接后续节点（如 shenpi）
-        // 即使逻辑节点条件不满足，fallback 节点也应该正常流转
+        // 以及受逻辑节点控制的审批节点（它们不能等待，只能主动触发）
         System.out.println("checkLogicNodesAfterApproval - fallback 处理中...");
+        System.out.println("checkLogicNodesAfterApproval - 受控节点: " + logicNodeControlledKeys);
 
+        // 【BUG修复】找出需要主动触发的受控审批节点（不在逻辑节点本身，只在逻辑节点的后续中）
+        // 关键：只有当逻辑与(AND)节点的条件已满足，或逻辑或(OR)节点的条件已满足时，
+        // 才能触发其控制的审批节点。逻辑与节点在所有并行分支完成前不得触发后续审批节点。
+        Set<String> controlledApprovalNodeKeys = new HashSet<>();
+        for (FlowNodeConfig logicNode : logicNodes) {
+            boolean conditionMet = checkLogicNodeCondition(instance, logicNode, allNodes, flowLines, nodeKeyMap, nodeIdMap);
+            if (conditionMet) {
+                // 只有条件满足的逻辑节点，才将其后续审批节点加入触发列表
+                List<FlowNodeConfig> logicNext = findNextNodesByLines(logicNode, allNodes, flowLines, nodeKeyMap, nodeIdMap);
+                for (FlowNodeConfig n : logicNext) {
+                    controlledApprovalNodeKeys.add(n.getNodeKey());
+                }
+            } else {
+                // 逻辑与(AND)节点条件不满足时，打印日志记录等待状态
+                List<String> pendingNodes = getPendingPredecessorNodes(instance, logicNode, allNodes, flowLines, nodeKeyMap, nodeIdMap);
+                System.out.println("checkLogicNodesAfterApproval - 逻辑与节点[" + logicNode.getNodeKey()
+                        + "]条件未满足，等待: " + String.join(", ", pendingNodes));
+            }
+        }
+
+        System.out.println("checkLogicNodesAfterApproval - 需要主动触发的受控审批节点: " + controlledApprovalNodeKeys);
+
+        // 主动触发受控的审批节点
+        if (!controlledApprovalNodeKeys.isEmpty()) {
+            Set<String> triggeredProcessedNodes = new HashSet<>();
+            triggeredProcessedNodes.add(currentNode.getNodeKey());
+            for (String controlledKey : controlledApprovalNodeKeys) {
+                FlowNodeConfig controlledNode = nodeKeyMap.get(controlledKey);
+                if (controlledNode != null && FlowNodeType.APPROVE.getCode().equals(controlledNode.getNodeType())) {
+                    System.out.println("checkLogicNodesAfterApproval - 主动触发受控审批节点: " + controlledKey);
+                    processNodeAndChildren(instance, controlledNode, allNodes, flowLines,
+                            nodeKeyMap, nodeIdMap, dynamicHandlerMap, triggeredProcessedNodes);
+                }
+            }
+        }
+
+        // 处理不受控制的 fallback 节点
         if (!fallbackNodes.isEmpty()) {
             System.out.println("checkLogicNodesAfterApproval - fallback 节点不为空，正常流转后续节点: " + fallbackNodes.size());
 
@@ -955,6 +1103,74 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     /**
+     * 【新增】跳过逻辑或节点控制的并列审批节点
+     * 当逻辑或节点的任意一个前置审批节点通过后，其余并列的待处理审批节点将被标记为"已跳过"
+     */
+    private void skipParallelApprovalNodes(FlowInstance instance, FlowNodeConfig logicNode,
+            List<FlowNodeConfig> allNodes, List<FlowLine> flowLines,
+            Map<String, FlowNodeConfig> nodeKeyMap, Map<String, FlowNodeConfig> nodeIdMap) {
+        
+        System.out.println("skipParallelApprovalNodes - 开始处理逻辑或节点的并列审批节点");
+        
+        // 获取逻辑或节点的所有前置审批节点
+        List<FlowNodeConfig> predecessorNodes = findPredecessorApprovalNodes(logicNode, allNodes, flowLines, nodeKeyMap, nodeIdMap);
+        
+        if (predecessorNodes.isEmpty()) {
+            return;
+        }
+        
+        // 获取当前实例的所有任务
+        List<FlowTask> allTasks = flowTaskMapper.selectList(
+                new LambdaQueryWrapper<FlowTask>()
+                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getDeleted, 0)
+        );
+        
+        // 找出所有前置审批节点中状态为"待处理"的任务（status=0）
+        // 这些任务对应的是与已通过审批节点并列的其他审批节点
+        List<String> skipNodeKeys = new ArrayList<>();
+        for (FlowNodeConfig predNode : predecessorNodes) {
+            for (FlowTask task : allTasks) {
+                if (task.getNodeKey().equals(predNode.getNodeKey()) && task.getStatus() == 0) {
+                    skipNodeKeys.add(predNode.getNodeKey());
+                    System.out.println("skipParallelApprovalNodes - 将跳过节点: " + predNode.getNodeName() + " (key=" + predNode.getNodeKey() + ")");
+                }
+            }
+        }
+        
+        // 将并列的待处理审批节点标记为"已跳过"（status=5）
+        for (String nodeKey : skipNodeKeys) {
+            // 查找该节点的所有待处理任务
+            List<FlowTask> tasksToSkip = flowTaskMapper.selectList(
+                    new LambdaQueryWrapper<FlowTask>()
+                            .eq(FlowTask::getInstanceId, instance.getId())
+                            .eq(FlowTask::getNodeKey, nodeKey)
+                            .eq(FlowTask::getStatus, 0)
+                            .eq(FlowTask::getDeleted, 0)
+            );
+            
+            for (FlowTask task : tasksToSkip) {
+                task.setStatus(5); // 已跳过
+                task.setAction("skip");
+                task.setComment("因逻辑或节点其他分支已通过，该节点被自动跳过");
+                task.setExecuteTime(new Date());
+                flowTaskMapper.updateById(task);
+                
+                // 记录操作日志
+                logService.saveLog(instance.getId(), null, null,
+                        "skip", "审批节点[" + task.getNodeName() + "]因逻辑或条件满足被自动跳过");
+                
+                System.out.println("skipParallelApprovalNodes - 已将节点[" + task.getNodeName() + "]标记为已跳过");
+            }
+        }
+        
+        if (!skipNodeKeys.isEmpty()) {
+            logService.saveLog(instance.getId(), null, null,
+                    "skip", "逻辑或节点条件满足，跳过并列审批节点：" + String.join(", ", skipNodeKeys));
+        }
+    }
+
+    /**
      * 查找所有指向指定逻辑节点的审批节点
      */
     private List<FlowNodeConfig> findPredecessorApprovalNodes(FlowNodeConfig logicNode,
@@ -1061,7 +1277,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             flowCode = flowDefinition.getFlowCode();
         }
 
+        String callbackToken = task.getCallbackToken();
         String callbackUrl = "/flow/callback/complete";
+        String callbackSuccessUrl = "/flow/callback/success";
+        String callbackFailedUrl = "/flow/callback/failed";
+        String callbackLogUrl = "/flow/callback/log";
 
         System.out.println("【异步模块调用】========================================");
         System.out.println("【异步模块调用】目标模块: " + moduleCode);
@@ -1069,11 +1289,16 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println("【异步模块调用】节点编码(node_key): " + task.getNodeKey());
         System.out.println("【异步模块调用】流程实例ID: " + instance.getId());
         System.out.println("【异步模块调用】任务ID: " + task.getId());
-        System.out.println("【异步模块调用】回调令牌(callback_token): " + task.getCallbackToken());
+        System.out.println("【异步模块调用】回调令牌(callback_token): " + callbackToken);
         System.out.println("【异步模块调用】审批人: " + (operator != null ? operator.getUsername() : "系统"));
         System.out.println("【异步模块调用】审批时间: " + (task.getExecuteTime() != null ? task.getExecuteTime() : new Date()));
-        System.out.println("【异步模块调用】回调地址(callback_url): " + callbackUrl);
         System.out.println("【异步模块调用】自定义参数: " + params);
+        System.out.println("【异步模块调用】========================================");
+        System.out.println("【异步模块调用】回调接口说明：");
+        System.out.println("【异步模块调用】- 业务执行成功，调用: POST " + callbackSuccessUrl + "?callbackToken=" + callbackToken + "&message=成功信息");
+        System.out.println("【异步模块调用】- 业务执行失败，调用: POST " + callbackFailedUrl + "?callbackToken=" + callbackToken + "&message=失败原因");
+        System.out.println("【异步模块调用】- 更新执行日志: POST " + callbackLogUrl + "?callbackToken=" + callbackToken + "&logContent=日志内容");
+        System.out.println("【异步模块调用】- 通用回调: POST " + callbackUrl + "?callbackToken=" + callbackToken + "&success=true&message=信息");
         System.out.println("【异步模块调用】========================================");
 
         TaskCallbackContext ctx = new TaskCallbackContext();
@@ -1084,12 +1309,29 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         ctx.setOperatorId(operator != null ? operator.getId() : null);
         ctx.setOperatorName(operator != null ? operator.getUsername() : "系统");
         ctx.setCallbackTime(new Date());
-        callbackTokenMap.put(task.getCallbackToken(), ctx);
+        callbackTokenMap.put(callbackToken, ctx);
 
         logService.saveLog(instance.getId(), operator != null ? operator.getId() : null,
                 operator != null ? operator.getUsername() : "系统",
                 "module_call_async", "异步调用模块[" + moduleCode + "]，flow_code: " + flowCode +
-                "，node_key: " + task.getNodeKey() + "，callback_token: " + task.getCallbackToken());
+                "，node_key: " + task.getNodeKey() + "，callback_token: " + callbackToken);
+
+        // 【模拟】在这里可以添加实际的HTTP调用逻辑，例如：
+        // try {
+        //     String moduleEndpoint = "http://module-service/api/execute";
+        //     Map<String, Object> requestBody = new HashMap<>();
+        //     requestBody.put("flow_code", flowCode);
+        //     requestBody.put("node_key", task.getNodeKey());
+        //     requestBody.put("instance_id", instance.getId());
+        //     requestBody.put("callback_token", callbackToken);
+        //     requestBody.put("callback_url", callbackUrl);
+        //     requestBody.put("params", params);
+        //     // 发送HTTP请求到外部模块
+        //     restTemplate.postForObject(moduleEndpoint, requestBody, String.class);
+        // } catch (Exception e) {
+        //     // 调用失败，自动触发失败回调
+        //     handleModuleCallback(callbackToken, false, "模块调用失败: " + e.getMessage(), null);
+        // }
     }
 
     public Map<String, Object> handleModuleCallback(String callbackToken, boolean success, String message, String extraData) {
@@ -1134,6 +1376,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             task.setStatus(1);
             flowTaskMapper.updateById(task);
             callbackTokenMap.remove(callbackToken);
+
+            // 清空 currentNodeKey，让后续节点触发时设置正确的值
+            instance.setCurrentNodeKey("");
+            instance.setCurrentNodeName("");
+            flowInstanceMapper.updateById(instance);
 
             // 审批通过后检查逻辑节点
             checkLogicNodesAfterApproval(instance, task);
@@ -1804,6 +2051,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         nodeVO.setAction("驳回");
                     } else if ("notify".equals(firstTask.getAction())) {
                         nodeVO.setAction("通知");
+                    } else if ("skip".equals(firstTask.getAction())) {
+                        nodeVO.setAction("跳过");
                     } else {
                         nodeVO.setAction(firstTask.getAction());
                     }
@@ -1811,12 +2060,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     nodeVO.setComment(firstTask.getComment());
                     nodeVO.setExecuteTime(firstTask.getExecuteTime());
 
-                    // 【修复】end 节点状态：只有当整个流程实例已完成（status=2）时才显示"已完成"
-                    // 不应该只看 end 节点自己的任务状态（end 任务创建时 status=1，但流程还未真正完成）
+                    // 【修复】end 节点状态：
+                    // 1. 如果没有任务（正常情况），根据流程实例状态判断：已完成显示"已完成"，否则显示"待触发"
+                    // 2. 如果有任务但流程未完成，说明任务被提前创建了，状态应该显示"待触发"
                     if (FlowNodeType.END.getCode().equals(nodeConfig.getNodeType())) {
                         boolean instanceCompleted = instanceStatus != null
                                 && FlowInstanceStatus.COMPLETED.getCode().equals(instanceStatus);
-                        nodeVO.setStatus(instanceCompleted ? "已完成" : "进行中");
+                        // 流程未完成时，end 节点状态应该是"待触发"
+                        nodeVO.setStatus(instanceCompleted ? "已完成" : "待触发");
                     } else {
                         // 其他节点：取第一个任务的 status
                         String statusText;
@@ -1826,6 +2077,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                             case 2: statusText = "已驳回"; break;
                             case 3: statusText = "业务执行中"; break;
                             case 4: statusText = "逻辑处理失败"; break;
+                            case 5: statusText = "已跳过"; break;
                             default: statusText = "未知"; break;
                         }
                         nodeVO.setStatus(statusText);
@@ -1951,7 +2203,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 LambdaQueryWrapper<SysUserRole> queryWrapper = new LambdaQueryWrapper<>();
                 queryWrapper.eq(SysUserRole::getRoleId, Long.parseLong(roleId.trim()));
 
-                if ("C".equals(nodeConfig.getModuleCode()) && tenantId != null) {
+                // 多租户模块需要按租户筛选角色成员
+                if (isMultiTenantModule(nodeConfig.getModuleCode()) && tenantId != null) {
                     queryWrapper.eq(SysUserRole::getTenantId, tenantId);
                 }
 

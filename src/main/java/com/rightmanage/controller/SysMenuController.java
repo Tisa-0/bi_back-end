@@ -34,15 +34,15 @@ public class SysMenuController {
                                           @RequestParam(required = false) Long userId) {
         if (userId != null && moduleCode != null && !moduleCode.isEmpty()) {
             // 如果传入userId，则根据用户角色过滤菜单
-            // 模块C需要根据租户ID过滤
-            if ("C".equals(moduleCode) && tenantId != null) {
+            // 模块bi_wx_product需要根据租户ID过滤
+            if ("bi_wx_product".equals(moduleCode) && tenantId != null) {
                 return Result.success(sysMenuService.listTreeByUserIdAndModuleCodeAndTenant(userId, moduleCode, tenantId));
             }
             return Result.success(sysMenuService.listTreeByUserIdAndModuleCode(userId, moduleCode));
         }
         if (moduleCode != null && !moduleCode.isEmpty()) {
             // 产品智能定制模块使用新的按租户过滤方法
-            if ("C".equals(moduleCode) && tenantId != null) {
+            if ("bi_wx_product".equals(moduleCode) && tenantId != null) {
                 return Result.success(sysMenuService.listProductCustomMenuTree(tenantId));
             }
             return Result.success(sysMenuService.listTreeByModuleCode(moduleCode));
@@ -52,13 +52,13 @@ public class SysMenuController {
 
     /**
      * 获取菜单树选项（用于新增/修改时的父菜单选择）
-     * 产品智能定制模块(C)支持tenantId过滤，其他模块忽略tenantId
+     * 产品智能定制模块(bi_wx_product)支持tenantId过滤，其他模块忽略tenantId
      */
     @GetMapping("/treeOptions")
     public Result<List<SysMenuVO>> treeOptions(@RequestParam String moduleCode,
                                                 @RequestParam(required = false) Long tenantId) {
         // 产品智能定制模块使用新的按租户过滤方法
-        if ("C".equals(moduleCode) && tenantId != null) {
+        if ("bi_wx_product".equals(moduleCode) && tenantId != null) {
             return Result.success(sysMenuService.getProductCustomMenuTreeOptions(tenantId));
         }
         return Result.success(sysMenuService.getMenuTreeOptions(moduleCode));

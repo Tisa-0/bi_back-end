@@ -1,11 +1,13 @@
 package com.rightmanage.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.rightmanage.dto.BindResultVO;
 import com.rightmanage.entity.*;
 import com.rightmanage.mapper.*;
+import com.rightmanage.service.SysModuleService;
 import com.rightmanage.service.SysRoleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,18 @@ public class SysRoleServiceImpl implements SysRoleService {
     private SysUserRoleMapper sysUserRoleMapper;
     @Autowired
     private SysUserMapper sysUserMapper;
+    @Autowired
+    private SysModuleService sysModuleService;
+
+    /**
+     * 判断是否是多租户模块
+     */
+    private boolean isMultiTenantModule(String moduleCode) {
+        if (moduleCode == null || moduleCode.isEmpty()) {
+            return false;
+        }
+        return sysModuleService.isMultiTenant(moduleCode);
+    }
 
     @Override
     public IPage<SysRole> pageByModuleCode(Integer pageNum, Integer pageSize, String moduleCode, Long tenantId) {
@@ -38,8 +52,6 @@ public class SysRoleServiceImpl implements SysRoleService {
         if (moduleCode != null && !moduleCode.isEmpty()) {
             wrapper.eq(SysRole::getModuleCode, moduleCode);
         }
-        // 模块C：所有租户共用同一套角色，不需要按tenantId筛选角色本身
-        // 角色列表不区分租户，但绑定菜单和成员时需要区分租户
         wrapper.orderByDesc(SysRole::getCreateTime);
         IPage<SysRole> result = sysRoleMapper.selectPage(page, wrapper);
         return result;
@@ -57,7 +69,7 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     public List<SysRole> listByModuleCodeAndTenantId(String moduleCode, Long tenantId) {
-        // 模块C：所有租户共用同一套角色，直接返回角色列表
+        // 多租户模块：所有租户共用同一套角色，直接返回角色列表
         LambdaQueryWrapper<SysRole> wrapper = new LambdaQueryWrapper<>();
         if (moduleCode != null && !moduleCode.isEmpty()) {
             wrapper.eq(SysRole::getModuleCode, moduleCode);
@@ -78,7 +90,15 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     public boolean updateById(SysRole role) {
-        return sysRoleMapper.updateById(role) > 0;
+        LambdaUpdateWrapper<SysRole> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(SysRole::getId, role.getId())
+               .set(role.getOrgRelated() != null, SysRole::getOrgRelated, role.getOrgRelated())
+               .set(role.getTenantId() != null, SysRole::getTenantId, role.getTenantId())
+               .set(SysRole::getRoleName, role.getRoleName())
+               .set(SysRole::getRoleCode, role.getRoleCode())
+               .set(SysRole::getDescription, role.getDescription())
+               .set(SysRole::getModuleCode, role.getModuleCode());
+        return sysRoleMapper.update(null, wrapper) > 0;
     }
 
     @Override
@@ -101,8 +121,8 @@ public class SysRoleServiceImpl implements SysRoleService {
         if (moduleCode != null && !moduleCode.isEmpty()) {
             wrapper.eq(SysRoleMenu::getModuleCode, moduleCode);
         }
-        // 模块C需要按租户筛选
-        if ("C".equals(moduleCode) && tenantId != null) {
+        // 多租户模块需要按租户筛选
+        if (isMultiTenantModule(moduleCode) && tenantId != null) {
             wrapper.eq(SysRoleMenu::getTenantId, tenantId);
         }
         List<SysRoleMenu> roleMenus = sysRoleMenuMapper.selectList(wrapper);
@@ -112,14 +132,14 @@ public class SysRoleServiceImpl implements SysRoleService {
     @Override
     @Transactional
     public boolean bindMenus(Long roleId, List<Long> menuIds, String moduleCode, Long tenantId) {
-        // 删除原有菜单（模块C需要区分租户）
+        // 删除原有菜单（多租户模块需要区分租户）
         LambdaQueryWrapper<SysRoleMenu> deleteWrapper = new LambdaQueryWrapper<>();
         deleteWrapper.eq(SysRoleMenu::getRoleId, roleId);
         if (moduleCode != null && !moduleCode.isEmpty()) {
             deleteWrapper.eq(SysRoleMenu::getModuleCode, moduleCode);
         }
-        // 模块C需要按租户删除
-        if ("C".equals(moduleCode) && tenantId != null) {
+        // 多租户模块需要按租户删除
+        if (isMultiTenantModule(moduleCode) && tenantId != null) {
             deleteWrapper.eq(SysRoleMenu::getTenantId, tenantId);
         }
         sysRoleMenuMapper.delete(deleteWrapper);
@@ -130,8 +150,8 @@ public class SysRoleServiceImpl implements SysRoleService {
                 roleMenu.setRoleId(roleId);
                 roleMenu.setMenuId(menuId);
                 roleMenu.setModuleCode(moduleCode);
-                // 模块C需要设置租户ID
-                if ("C".equals(moduleCode)) {
+                // 多租户模块需要设置租户ID
+                if (isMultiTenantModule(moduleCode)) {
                     roleMenu.setTenantId(tenantId);
                 }
                 sysRoleMenuMapper.insert(roleMenu);
@@ -178,8 +198,8 @@ public class SysRoleServiceImpl implements SysRoleService {
     public List<Long> getUserIdsByRoleId(Long roleId, String moduleCode, Long tenantId) {
         LambdaQueryWrapper<SysUserRole> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserRole::getRoleId, roleId);
-        // 模块C需要按租户筛选
-        if ("C".equals(moduleCode) && tenantId != null) {
+        // 多租户模块需要按租户筛选
+        if (isMultiTenantModule(moduleCode) && tenantId != null) {
             wrapper.eq(SysUserRole::getTenantId, tenantId);
         }
         List<SysUserRole> userRoles = sysUserRoleMapper.selectList(wrapper);
@@ -189,10 +209,10 @@ public class SysRoleServiceImpl implements SysRoleService {
     @Override
     @Transactional
     public boolean bindUsers(Long roleId, List<Long> userIds, String moduleCode, Long tenantId) {
-        // 删除原有用户（模块C需要区分租户）
+        // 删除原有用户（多租户模块需要区分租户）
         LambdaQueryWrapper<SysUserRole> deleteWrapper = new LambdaQueryWrapper<>();
         deleteWrapper.eq(SysUserRole::getRoleId, roleId);
-        if ("C".equals(moduleCode) && tenantId != null) {
+        if (isMultiTenantModule(moduleCode) && tenantId != null) {
             deleteWrapper.eq(SysUserRole::getTenantId, tenantId);
         }
         sysUserRoleMapper.delete(deleteWrapper);
@@ -203,8 +223,8 @@ public class SysRoleServiceImpl implements SysRoleService {
                 userRole.setUserId(userId);
                 userRole.setRoleId(roleId);
                 userRole.setModuleCode(moduleCode);
-                // 模块C需要设置租户ID
-                if ("C".equals(moduleCode)) {
+                // 多租户模块需要设置租户ID
+                if (isMultiTenantModule(moduleCode)) {
                     userRole.setTenantId(tenantId);
                 }
                 sysUserRoleMapper.insert(userRole);
@@ -217,7 +237,7 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     public List<SysUser> getRoleUsers(Long roleId, String moduleCode, Long tenantId) {
-        // 获取角色已绑定的所有用户ID（模块C需要区分租户）
+        // 获取角色已绑定的所有用户ID（多租户模块需要区分租户）
         List<Long> userIds = getUserIdsByRoleId(roleId, moduleCode, tenantId);
         if (userIds == null || userIds.isEmpty()) {
             return new ArrayList<>();
@@ -228,8 +248,8 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     public List<SysUser> getOptionalUsers(Long roleId, String keyword, Integer status, Integer pageNum, Integer pageSize, Long tenantId) {
-        // 获取角色已绑定的用户ID（模块C需要区分租户）
-        Set<Long> boundUserIds = new HashSet<>(getUserIdsByRoleId(roleId, "C", tenantId));
+        // 获取角色已绑定的用户ID（多租户模块需要区分租户）
+        Set<Long> boundUserIds = new HashSet<>(getUserIdsByRoleId(roleId, "bi_wx_product", tenantId));
 
         // 构建查询条件
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<>();
@@ -252,7 +272,7 @@ public class SysRoleServiceImpl implements SysRoleService {
             return BindResultVO.success(0, "未选择用户");
         }
 
-        // 获取已绑定的用户ID（模块C需要区分租户）
+        // 获取已绑定的用户ID（多租户模块需要区分租户）
         Set<Long> boundUserIds = new HashSet<>(getUserIdsByRoleId(roleId, moduleCode, tenantId));
 
         List<Long> failUserIds = new ArrayList<>();
@@ -269,7 +289,7 @@ public class SysRoleServiceImpl implements SysRoleService {
             userRole.setUserId(userId);
             userRole.setRoleId(roleId);
             userRole.setModuleCode(moduleCode);
-            if ("C".equals(moduleCode)) {
+            if (isMultiTenantModule(moduleCode)) {
                 userRole.setTenantId(tenantId);
             }
             sysUserRoleMapper.insert(userRole);
@@ -292,7 +312,7 @@ public class SysRoleServiceImpl implements SysRoleService {
             return BindResultVO.success(0, "未选择用户");
         }
 
-        // 获取该角色所有用户（模块C需要区分租户）
+        // 获取该角色所有用户（多租户模块需要区分租户）
         List<Long> allUserIds = getUserIdsByRoleId(roleId, moduleCode, tenantId);
         Set<Long> allUserIdSet = new HashSet<>(allUserIds);
 
@@ -306,11 +326,11 @@ public class SysRoleServiceImpl implements SysRoleService {
                 continue;
             }
 
-            // 删除用户角色关联（模块C需要区分租户）
+            // 删除用户角色关联（多租户模块需要区分租户）
             LambdaQueryWrapper<SysUserRole> deleteWrapper = new LambdaQueryWrapper<>();
             deleteWrapper.eq(SysUserRole::getRoleId, roleId);
             deleteWrapper.eq(SysUserRole::getUserId, userId);
-            if ("C".equals(moduleCode) && tenantId != null) {
+            if (isMultiTenantModule(moduleCode) && tenantId != null) {
                 deleteWrapper.eq(SysUserRole::getTenantId, tenantId);
             }
             sysUserRoleMapper.delete(deleteWrapper);
@@ -330,7 +350,7 @@ public class SysRoleServiceImpl implements SysRoleService {
     public boolean clearRoleUsers(Long roleId, String moduleCode, Long tenantId) {
         LambdaQueryWrapper<SysUserRole> deleteWrapper = new LambdaQueryWrapper<>();
         deleteWrapper.eq(SysUserRole::getRoleId, roleId);
-        if ("C".equals(moduleCode) && tenantId != null) {
+        if (isMultiTenantModule(moduleCode) && tenantId != null) {
             deleteWrapper.eq(SysUserRole::getTenantId, tenantId);
         }
         sysUserRoleMapper.delete(deleteWrapper);

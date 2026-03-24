@@ -28,4 +28,10 @@ public class SysRole implements Serializable {
 
     @TableLogic
     private Integer deleted;
+
+    @TableField("tenant_id")
+    private Long tenantId;
+
+    @TableField("org_related")
+    private Boolean orgRelated;
 }

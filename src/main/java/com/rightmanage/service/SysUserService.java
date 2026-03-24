@@ -1,6 +1,7 @@
 package com.rightmanage.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.rightmanage.entity.BankOrg;
 import com.rightmanage.entity.SysUser;
 
 import java.util.List;
@@ -26,4 +27,8 @@ public interface SysUserService {
     List<Long> getRoleIdsByUserId(Long userId, String moduleCode, Long tenantId);
 
     boolean bindRoles(Long userId, List<Long> roleIds, String moduleCode, Long tenantId);
+
+    BankOrg getAuthorizedOrg(Long userId, String moduleCode, Long tenantId);
+
+    boolean bindAuthorizedOrg(Long userId, String moduleCode, Long tenantId, Long orgId);
 }

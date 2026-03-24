@@ -31,7 +31,7 @@ public class FlowNodeConfig implements Serializable {
 
     private String handlerIds;
 
-    private String moduleCode; // 模块编码，产品智能定制模块为 "C"
+    private String moduleCode; // 模块编码，产品智能定制模块为 "bi_wx_product"
 
     private String notifyContent;
 

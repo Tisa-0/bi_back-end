@@ -372,6 +372,9 @@ CREATE TABLE `sys_module`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `module_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '模块代码(ABC)',
   `module_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '模块名称',
+  `multi_tenant` tinyint(1) NULL DEFAULT 0 COMMENT '是否多租户模块（0=否，1=是）',
+  `status` tinyint(1) NULL DEFAULT 1 COMMENT '状态（0=禁用，1=启用）',
+  `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '模块描述',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
@@ -381,9 +384,9 @@ CREATE TABLE `sys_module`  (
 -- ----------------------------
 -- Records of sys_module
 -- ----------------------------
-INSERT INTO `sys_module` VALUES (1, 'A', 'BI工作台', '2026-02-24 19:01:07', '2026-02-24 21:43:16');
-INSERT INTO `sys_module` VALUES (2, 'B', '灵活查询中心', '2026-02-24 19:01:07', '2026-02-24 21:43:24');
-INSERT INTO `sys_module` VALUES (3, 'C', '产品智能定制', '2026-02-24 19:01:07', '2026-02-24 21:43:38');
+INSERT INTO `sys_module` VALUES (1, 'A', 'BI工作台', 0, 1, 'BI数据分析工作台模块', '2026-02-24 19:01:07', '2026-02-24 21:43:16');
+INSERT INTO `sys_module` VALUES (2, 'B', '灵活查询中心', 0, 1, '灵活查询中心模块', '2026-02-24 19:01:07', '2026-02-24 21:43:24');
+INSERT INTO `sys_module` VALUES (3, 'C', '产品智能定制', 1, 1, '产品智能定制模块（多租户）', '2026-02-24 19:01:07', '2026-02-24 21:43:38');
 
 
 -- ----------------------------
@@ -400,6 +403,7 @@ CREATE TABLE `sys_role`  (
   `deleted` int(11) NULL DEFAULT 0 COMMENT '逻辑删除(0未删除1已删除)',
   `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '所属模块编码',
   `tenant_id` bigint(20) NULL DEFAULT NULL COMMENT '关联租户ID（仅模块C角色有值）',
+  `org_related` int(11) NULL DEFAULT 0 COMMENT '是否与机构相关(0否1是)',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_role_code_module`(`role_code`, `module_code`) USING BTREE,
   INDEX `idx_module_tenant`(`module_code`, `tenant_id`) USING BTREE
@@ -408,19 +412,19 @@ CREATE TABLE `sys_role`  (
 -- ----------------------------
 -- Records of sys_role
 -- ----------------------------
-INSERT INTO `sys_role` VALUES (1, 'BI工作台超管', 'SUPER_ADMIN', 'BI工作台超管', '2026-02-24 19:01:07', '2026-02-28 10:28:43', 0, 'A', NULL);
-INSERT INTO `sys_role` VALUES (2, '灵活查询管理员', 'MODULE_A_ADMIN', '灵活查询管理员', '2026-02-24 19:01:07', '2026-02-28 10:29:00', 0, 'B', NULL);
-INSERT INTO `sys_role` VALUES (4, 'BI工作台普通用户', 'MODULE_C_READ', 'BI工作台普通用户', '2026-02-24 19:01:07', '2026-02-28 10:28:34', 0, 'A', NULL);
-INSERT INTO `sys_role` VALUES (5, '灵活查询普通用户', 'USER', '灵活查询普通用户', '2026-02-24 19:01:07', '2026-02-28 10:29:06', 0, 'B', NULL);
-INSERT INTO `sys_role` VALUES (6, '租户管理员', 'TENANT_ADMIN', '租户超级管理员', '2026-02-28 11:00:54', '2026-03-05 18:24:15', 0, 'C', 1);
-INSERT INTO `sys_role` VALUES (7, '产品设计员', 'PRODUCT_DESIGNER', '租户产品设计人员', '2026-02-28 11:00:54', '2026-03-10 15:23:28', 1, 'A', 1);
-INSERT INTO `sys_role` VALUES (8, '产品设计员', 'TENANT_VIEWER', '产品设计员', '2026-02-28 11:00:54', '2026-03-05 18:24:19', 0, 'C', 1);
-INSERT INTO `sys_role` VALUES (15, '流程管理员', 'FLOW_ADMIN', '流程管理超级管理员', '2026-03-05 09:20:18', '2026-03-05 09:20:18', 0, NULL, NULL);
-INSERT INTO `sys_role` VALUES (16, '流程发起人', 'FLOW_STARTER', '可发起流程', '2026-03-05 09:20:18', '2026-03-05 09:20:18', 0, NULL, NULL);
-INSERT INTO `sys_role` VALUES (17, '流程审批人', 'FLOW_APPROVER', '可审批流程', '2026-03-05 09:20:18', '2026-03-05 09:20:18', 0, NULL, NULL);
-INSERT INTO `sys_role` VALUES (18, '123', 'T', '', '2026-03-10 15:19:45', '2026-03-10 15:19:50', 1, 'A', NULL);
-INSERT INTO `sys_role` VALUES (19, '数据集管理员', 'DATA', '', '2026-03-10 15:26:56', '2026-03-10 15:26:56', 0, 'C', NULL);
-INSERT INTO `sys_role` VALUES (20, '分行审批员', 'SHENPI', '', '2026-03-10 15:27:17', '2026-03-10 15:27:17', 0, 'C', NULL);
+INSERT INTO `sys_role` VALUES (1, 'BI工作台超管', 'SUPER_ADMIN', 'BI工作台超管', '2026-02-24 19:01:07', '2026-02-28 10:28:43', 0, 'A', NULL, 0);
+INSERT INTO `sys_role` VALUES (2, '灵活查询管理员', 'MODULE_A_ADMIN', '灵活查询管理员', '2026-02-24 19:01:07', '2026-02-28 10:29:00', 0, 'B', NULL, 0);
+INSERT INTO `sys_role` VALUES (4, 'BI工作台普通用户', 'MODULE_C_READ', 'BI工作台普通用户', '2026-02-24 19:01:07', '2026-02-28 10:28:34', 0, 'A', NULL, 0);
+INSERT INTO `sys_role` VALUES (5, '灵活查询普通用户', 'USER', '灵活查询普通用户', '2026-02-24 19:01:07', '2026-02-28 10:29:06', 0, 'B', NULL, 0);
+INSERT INTO `sys_role` VALUES (6, '租户管理员', 'TENANT_ADMIN', '租户超级管理员', '2026-02-28 11:00:54', '2026-03-05 18:24:15', 0, 'C', 1, 0);
+INSERT INTO `sys_role` VALUES (7, '产品设计员', 'PRODUCT_DESIGNER', '租户产品设计人员', '2026-02-28 11:00:54', '2026-03-10 15:23:28', 1, 'A', 1, 0);
+INSERT INTO `sys_role` VALUES (8, '产品设计员', 'TENANT_VIEWER', '产品设计员', '2026-02-28 11:00:54', '2026-03-05 18:24:19', 0, 'C', 1, 0);
+INSERT INTO `sys_role` VALUES (15, '流程管理员', 'FLOW_ADMIN', '流程管理超级管理员', '2026-03-05 09:20:18', '2026-03-05 09:20:18', 0, NULL, NULL, 0);
+INSERT INTO `sys_role` VALUES (16, '流程发起人', 'FLOW_STARTER', '可发起流程', '2026-03-05 09:20:18', '2026-03-05 09:20:18', 0, NULL, NULL, 0);
+INSERT INTO `sys_role` VALUES (17, '流程审批人', 'FLOW_APPROVER', '可审批流程', '2026-03-05 09:20:18', '2026-03-05 09:20:18', 0, NULL, NULL, 0);
+INSERT INTO `sys_role` VALUES (18, '123', 'T', '', '2026-03-10 15:19:45', '2026-03-10 15:19:50', 1, 'A', NULL, 0);
+INSERT INTO `sys_role` VALUES (19, '数据集管理员', 'DATA', '', '2026-03-10 15:26:56', '2026-03-10 15:26:56', 0, 'C', NULL, 0);
+INSERT INTO `sys_role` VALUES (20, '分行审批员', 'SHENPI', '', '2026-03-10 15:27:17', '2026-03-10 15:27:17', 0, 'C', NULL, 0);
 
 
 -- ----------------------------
@@ -612,20 +616,19 @@ CREATE TABLE `sys_tenant`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '租户ID',
   `tenant_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '租户名称',
   `tenant_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '租户编码（唯一）',
-  `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT 'C' COMMENT '所属模块（固定为C）',
   `status` int(11) NULL DEFAULT 1 COMMENT '状态（1启用 0禁用）',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_tenant_code`(`tenant_code`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '模块C租户表' ROW_FORMAT = Compact;
+) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '租户表' ROW_FORMAT = Compact;
 
 -- ----------------------------
 -- Records of sys_tenant
 -- ----------------------------
-INSERT INTO `sys_tenant` VALUES (1, '公共租户', 'TENANT_001', 'C', 1, '2026-02-28 11:00:54', '2026-02-28 14:15:27');
-INSERT INTO `sys_tenant` VALUES (2, 'CMM租户', 'TENANT_002', 'C', 1, '2026-02-28 11:00:54', '2026-02-28 14:15:32');
-INSERT INTO `sys_tenant` VALUES (3, 'ALM租户', 'TENANT_003', 'C', 1, '2026-02-28 11:00:54', '2026-02-28 14:15:36');
+INSERT INTO `sys_tenant` VALUES (1, '公共租户', 'TENANT_001', 1, '2026-02-28 11:00:54', '2026-02-28 14:15:27');
+INSERT INTO `sys_tenant` VALUES (2, 'CMM租户', 'TENANT_002', 1, '2026-02-28 11:00:54', '2026-02-28 14:15:32');
+INSERT INTO `sys_tenant` VALUES (3, 'ALM租户', 'TENANT_003', 1, '2026-02-28 11:00:54', '2026-02-28 14:15:36');
 
 
 -- ----------------------------
@@ -750,3 +753,108 @@ INSERT INTO `sys_user_role` VALUES (22, 1, 6, '2026-03-09 15:38:23', 'C', 1);
 INSERT INTO `sys_user_role` VALUES (23, 1, 7, '2026-03-09 15:38:23', 'C', 1);
 INSERT INTO `sys_user_role` VALUES (24, 2, 1, '2026-03-09 15:43:11', 'A', NULL);
 INSERT INTO `sys_user_role` VALUES (25, 2, 4, '2026-03-09 15:43:11', 'A', NULL);
+
+-- ----------------------------
+-- Table structure for bank_org
+-- ----------------------------
+DROP TABLE IF EXISTS `bank_org`;
+CREATE TABLE `bank_org`  (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `parent_id` bigint(20) NOT NULL DEFAULT 0 COMMENT '父机构ID，0表示根节点',
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '机构名称',
+  `code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '机构编码',
+  `level` tinyint(4) NOT NULL COMMENT '机构层级：1总行 2一级分行 3二级分行 4支行',
+  `sort` int(11) NULL DEFAULT 0 COMMENT '同层排序',
+  `status` tinyint(4) NULL DEFAULT 1 COMMENT '状态（1启用0禁用）',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted` tinyint(4) NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_bank_org_code`(`code`) USING BTREE,
+  INDEX `idx_parent_id`(`parent_id`) USING BTREE,
+  INDEX `idx_level`(`level`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 2000 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '银行机构树（固定四级）' ROW_FORMAT = Compact;
+
+-- ----------------------------
+-- Records of bank_org（总行1 + 一级分行6 + 二级分行12 + 支行18 = 37条）
+-- ----------------------------
+INSERT INTO `bank_org` VALUES (1, 0, '中国工商银行总行', 'ICBC001', 1, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+
+INSERT INTO `bank_org` VALUES (10, 1, '北京市分行', 'ICBC1100', 2, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (11, 1, '上海市分行', 'ICBC3100', 2, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (12, 1, '广东省分行', 'ICBC4400', 2, 3, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (13, 1, '江苏省分行', 'ICBC3200', 2, 4, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (14, 1, '浙江省分行', 'ICBC3300', 2, 5, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (15, 1, '四川省分行', 'ICBC5100', 2, 6, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+
+INSERT INTO `bank_org` VALUES (101, 10, '北京朝阳分行', 'ICBC1101', 3, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (102, 10, '北京海淀分行', 'ICBC1102', 3, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (111, 11, '上海浦东分行', 'ICBC3101', 3, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (112, 11, '上海闵行分行', 'ICBC3102', 3, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (121, 12, '广州分行', 'ICBC4401', 3, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (122, 12, '深圳分行', 'ICBC4403', 3, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (131, 13, '南京分行', 'ICBC3201', 3, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (132, 13, '苏州分行', 'ICBC3205', 3, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (141, 14, '杭州分行', 'ICBC3301', 3, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (142, 14, '宁波分行', 'ICBC3302', 3, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (151, 15, '成都分行', 'ICBC5101', 3, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (152, 15, '绵阳分行', 'ICBC5107', 3, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+
+INSERT INTO `bank_org` VALUES (1011, 101, '北京朝阳建国路支行', 'ICBC110101', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1012, 101, '北京朝阳国贸支行', 'ICBC110102', 4, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1021, 102, '北京海淀中关村支行', 'ICBC110201', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1111, 111, '上海浦东陆家嘴支行', 'ICBC310101', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1112, 111, '上海浦东张江支行', 'ICBC310102', 4, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1121, 112, '上海闵行莘庄支行', 'ICBC310201', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1211, 121, '广州天河支行', 'ICBC440101', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1212, 121, '广州越秀支行', 'ICBC440102', 4, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1221, 122, '深圳福田支行', 'ICBC440301', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1222, 122, '深圳南山支行', 'ICBC440302', 4, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1311, 131, '南京玄武支行', 'ICBC320101', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1312, 131, '南京鼓楼支行', 'ICBC320102', 4, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1321, 132, '苏州工业园区支行', 'ICBC320501', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1411, 141, '杭州西湖支行', 'ICBC330101', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1412, 141, '杭州滨江支行', 'ICBC330102', 4, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1421, 142, '宁波海曙支行', 'ICBC330201', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1511, 151, '成都锦江支行', 'ICBC510101', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1512, 151, '成都青羊支行', 'ICBC510102', 4, 2, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `bank_org` VALUES (1521, 152, '绵阳涪城支行', 'ICBC510701', 4, 1, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+
+-- ----------------------------
+-- Records of sys_menu（系统管理新增“银行机构树”菜单）
+-- ----------------------------
+INSERT INTO `sys_menu` VALUES (301, '银行机构树', 74, '/module/bank-org', 'common-manage/module/BankOrgTree', 'A', 5, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `sys_menu` VALUES (302, '银行机构树', 99, '/module/bank-org', 'common-manage/module/BankOrgTree', 'B', 5, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `sys_menu` VALUES (303, '银行机构树', 166, '/module/bank-org', 'common-manage/module/BankOrgTree', 'C', 6, 1, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+
+-- ----------------------------
+-- Table structure for sys_user_org_auth
+-- ----------------------------
+DROP TABLE IF EXISTS `sys_user_org_auth`;
+CREATE TABLE `sys_user_org_auth`  (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(20) NOT NULL COMMENT '用户ID',
+  `module_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '模块编码',
+  `tenant_id` bigint(20) NULL DEFAULT NULL COMMENT '租户ID（多租户模块生效）',
+  `org_id` bigint(20) NOT NULL COMMENT '授权机构ID（bank_org.id）',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted` tinyint(4) NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_user_module_tenant`(`user_id`, `module_code`, `tenant_id`) USING BTREE,
+  INDEX `idx_org_id`(`org_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 100 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '用户授权机构（按模块和租户隔离）' ROW_FORMAT = Compact;
+
+-- ----------------------------
+-- Records of sys_user_org_auth（模拟数据）
+-- ----------------------------
+INSERT INTO `sys_user_org_auth` VALUES (1, 1, 'bi_workstation', NULL, 101, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `sys_user_org_auth` VALUES (2, 1, 'bi_wx_product', 1, 121, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+INSERT INTO `sys_user_org_auth` VALUES (3, 1, 'bi_wx_product', 2, 151, '2026-03-24 10:00:00', '2026-03-24 10:00:00', 0);
+
+-- ----------------------------
+-- Records of sys_role_menu（给管理员角色授权银行机构树菜单）
+-- ----------------------------
+INSERT INTO `sys_role_menu` VALUES (335, 1, 301, 'A', '2026-03-24 10:00:00', NULL);
+INSERT INTO `sys_role_menu` VALUES (336, 2, 302, 'B', '2026-03-24 10:00:00', NULL);
+INSERT INTO `sys_role_menu` VALUES (337, 6, 303, 'C', '2026-03-24 10:00:00', NULL);

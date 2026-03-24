@@ -20,9 +20,6 @@ public class SysTenantServiceImpl implements SysTenantService {
     @Override
     public List<SysTenant> listByModuleCode(String moduleCode) {
         LambdaQueryWrapper<SysTenant> wrapper = new LambdaQueryWrapper<>();
-        if (moduleCode != null && !moduleCode.isEmpty()) {
-            wrapper.eq(SysTenant::getModuleCode, moduleCode);
-        }
         wrapper.eq(SysTenant::getStatus, 1);
         wrapper.orderByAsc(SysTenant::getId);
         return sysTenantMapper.selectList(wrapper);
@@ -59,9 +56,6 @@ public class SysTenantServiceImpl implements SysTenantService {
     public IPage<SysTenant> page(String moduleCode, String tenantName, Integer pageNum, Integer pageSize) {
         Page<SysTenant> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<SysTenant> wrapper = new LambdaQueryWrapper<>();
-        if (moduleCode != null && !moduleCode.isEmpty()) {
-            wrapper.eq(SysTenant::getModuleCode, moduleCode);
-        }
         if (tenantName != null && !tenantName.isEmpty()) {
             wrapper.like(SysTenant::getTenantName, tenantName);
         }

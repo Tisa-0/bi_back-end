@@ -16,6 +16,22 @@ public class SysModule implements Serializable {
 
     private String moduleName;
 
+    /**
+     * 是否多租户模块（0=否，1=是）
+     * 如果是多租户模块，则该模块下的角色管理等数据仅对当前租户生效
+     */
+    private Integer multiTenant;
+
+    /**
+     * 是否启用（0=禁用，1=启用）
+     */
+    private Integer status;
+
+    /**
+     * 模块描述
+     */
+    private String description;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 

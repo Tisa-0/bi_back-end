@@ -33,6 +33,11 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
 
     @Override
     public void saveFlowDefinition(FlowDefinitionDetailDTO dto, Long userId) {
+        // 校验流程编码唯一性
+        if (checkFlowCodeExists(dto.getFlowCode(), null)) {
+            throw new RuntimeException("流程编码已存在，请使用其他编码");
+        }
+
         FlowDefinition definition = new FlowDefinition();
         definition.setFlowName(dto.getFlowName());
         definition.setFlowCode(dto.getFlowCode());
@@ -190,7 +195,14 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
             throw new RuntimeException("流程定义不存在");
         }
 
-        BeanUtils.copyProperties(dto, definition, "id", "creatorId", "createTime", "updateTime", "flowCode");
+        // 校验流程编码唯一性（排除自身）
+        if (checkFlowCodeExists(dto.getFlowCode(), dto.getId())) {
+            throw new RuntimeException("流程编码已存在，请使用其他编码");
+        }
+
+        BeanUtils.copyProperties(dto, definition, "id", "creatorId", "createTime", "updateTime");
+        // 手动赋值 flowCode，允许编辑时修改
+        definition.setFlowCode(dto.getFlowCode());
         // 确保 canInitiate 字段被更新
         if (dto.getCanInitiate() != null) {
             definition.setCanInitiate(dto.getCanInitiate());
@@ -319,12 +331,28 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
         for (FlowNodeConfig node : nodes) {
             // 如果是审批节点且处理人类型为角色
             if ("approve".equals(node.getNodeType()) && "role".equals(node.getHandlerType())) {
-                // 检查是否涉及产品智能定制模块（moduleCode = "C"）
-                if ("C".equals(node.getModuleCode())) {
+                // 检查是否涉及产品智能定制模块（moduleCode = "bi_wx_product"）
+                if ("bi_wx_product".equals(node.getModuleCode())) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    /**
+     * 检查流程编码是否存在
+     */
+    @Override
+    public boolean checkFlowCodeExists(String flowCode, Long excludeId) {
+        if (!StringUtils.hasText(flowCode)) {
+            return false;
+        }
+        LambdaQueryWrapper<FlowDefinition> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(FlowDefinition::getFlowCode, flowCode);
+        if (excludeId != null) {
+            wrapper.ne(FlowDefinition::getId, excludeId);
+        }
+        return baseMapper.selectCount(wrapper) > 0;
     }
 }

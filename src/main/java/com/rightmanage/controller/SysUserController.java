@@ -2,6 +2,7 @@ package com.rightmanage.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.rightmanage.common.Result;
+import com.rightmanage.entity.BankOrg;
 import com.rightmanage.entity.SysTenant;
 import com.rightmanage.entity.SysUser;
 import com.rightmanage.service.SysTenantService;
@@ -92,6 +93,45 @@ public class SysUserController {
         }
         
         sysUserService.bindRoles(id, roleIds, moduleCode, tenantId);
+        return Result.success();
+    }
+
+    @GetMapping("/{id}/org-auth")
+    public Result<BankOrg> getUserOrgAuth(
+            @PathVariable Long id,
+            @RequestParam String moduleCode,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String tenantCode) {
+        if (tenantCode != null && !tenantCode.isEmpty() && tenantId == null) {
+            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
+            if (tenant != null) {
+                tenantId = tenant.getId();
+            }
+        }
+        return Result.success(sysUserService.getAuthorizedOrg(id, moduleCode, tenantId));
+    }
+
+    @PostMapping("/{id}/org-auth")
+    public Result<?> bindUserOrgAuth(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+        String moduleCode = (String) params.get("moduleCode");
+        Object tenantIdObj = params.get("tenantId");
+        Long tenantId = tenantIdObj != null ? ((Number) tenantIdObj).longValue() : null;
+        String tenantCode = (String) params.get("tenantCode");
+        Object orgIdObj = params.get("orgId");
+        Long orgId = orgIdObj != null ? ((Number) orgIdObj).longValue() : null;
+
+        if ((moduleCode == null || moduleCode.isEmpty()) || orgId == null) {
+            return Result.error("moduleCode和orgId不能为空");
+        }
+
+        if (tenantCode != null && !tenantCode.isEmpty() && tenantId == null) {
+            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
+            if (tenant != null) {
+                tenantId = tenant.getId();
+            }
+        }
+
+        sysUserService.bindAuthorizedOrg(id, moduleCode, tenantId, orgId);
         return Result.success();
     }
 }
