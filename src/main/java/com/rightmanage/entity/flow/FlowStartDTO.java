@@ -15,8 +15,18 @@ public class FlowStartDTO {
     private String attachmentUrl; // 凭证文件URL
     private String attachmentName; // 凭证文件名
     private Map<String, Object> params; // 流程参数
-    private List<DynamicHandlerDTO> dynamicHandlers; // 动态用户处理人列表
-    // 多租户审批节点租户选择：发起流程时选择的租户列表
-    // 用于过滤多租户审批节点的审批人：仅在这些租户下拥有对应角色的用户才能审批
+
+    /**
+     * 节点配置列表（运行时配置）
+     * - dynamic 节点：handlerId + handlerName
+     * - role 多租户节点：tenantIds（允许审批的租户列表）
+     * 其他节点可留空
+     * 后端会自动从 nodeConfigs 汇总所有 tenantIds 作为 nodeTenants，无需单独传参
+     */
+    private List<FlowNodeConfigDTO> nodeConfigs;
+
+    /**
+     * 全局节点租户列表（兼容旧逻辑，可不传）
+     */
     private List<Long> nodeTenants;
 }

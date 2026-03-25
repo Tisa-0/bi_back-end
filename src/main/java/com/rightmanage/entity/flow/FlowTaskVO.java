@@ -28,4 +28,6 @@ public class FlowTaskVO {
     private String executeLog; // 外部模块执行日志
     private Long tenantId; // 多租户审批节点的任务归属租户ID
     private String tenantName; // 多租户审批节点的任务归属租户名称
+    private Long sourceOrgId; // 发起机构ID（orgRelated节点有效）
+    private String sourceOrgName; // 发起机构名称（前端展示用）
 }

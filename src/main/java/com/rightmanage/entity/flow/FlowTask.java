@@ -60,4 +60,7 @@ public class FlowTask implements Serializable {
 
     // 该任务的租户ID（多租户审批节点有效，标记该任务属于哪个租户）
     private Long tenantId;
+
+    // 发起机构ID（orgRelated 节点有效，记录发起流程时选择的机构）
+    private Long sourceOrgId;
 }

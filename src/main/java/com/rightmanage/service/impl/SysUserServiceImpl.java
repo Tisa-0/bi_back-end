@@ -291,4 +291,103 @@ public class SysUserServiceImpl implements SysUserService {
         auth.setOrgId(orgId);
         return sysUserOrgAuthMapper.insert(auth) > 0;
     }
+
+    @Override
+    public List<Long> getAncestorOrgIds(Long orgId) {
+        if (orgId == null) {
+            return Collections.emptyList();
+        }
+        List<BankOrg> all = bankOrgMapper.selectList(new LambdaQueryWrapper<BankOrg>()
+                .eq(BankOrg::getStatus, 1)
+                .orderByAsc(BankOrg::getLevel));
+        Map<Long, BankOrg> byId = new LinkedHashMap<>();
+        for (BankOrg org : all) {
+            byId.put(org.getId(), org);
+        }
+        List<Long> ancestors = new ArrayList<>();
+        Long current = orgId;
+        while (current != null) {
+            ancestors.add(current);
+            BankOrg currentOrg = byId.get(current);
+            current = (currentOrg != null) ? currentOrg.getParentId() : null;
+        }
+        return ancestors;
+    }
+
+    @Override
+    public List<Long> getDescendantOrgIds(Long orgId) {
+        if (orgId == null) {
+            return Collections.emptyList();
+        }
+        List<BankOrg> all = bankOrgMapper.selectList(new LambdaQueryWrapper<BankOrg>()
+                .eq(BankOrg::getStatus, 1)
+                .orderByAsc(BankOrg::getLevel));
+        Map<Long, List<BankOrg>> childrenMap = new LinkedHashMap<>();
+        for (BankOrg org : all) {
+            childrenMap.computeIfAbsent(org.getParentId(), k -> new ArrayList<>()).add(org);
+        }
+        List<Long> descendants = new ArrayList<>();
+        descendants.add(orgId);
+        collectDescendants(orgId, childrenMap, descendants);
+        return descendants;
+    }
+
+    private void collectDescendants(Long parentId, Map<Long, List<BankOrg>> childrenMap, List<Long> result) {
+        List<BankOrg> children = childrenMap.get(parentId);
+        if (children != null) {
+            for (BankOrg child : children) {
+                result.add(child.getId());
+                collectDescendants(child.getId(), childrenMap, result);
+            }
+        }
+    }
+
+    /**
+     * 判断用户在指定模块/租户下，是否有权限审批机构相关任务
+     * <p>核心逻辑（可扩展）：
+     * 从 sourceOrgId 出发，依次向上遍历（通过 parentId），直到 parentId = 0（顶层根机构）。
+     * 在此路径上的所有机构ID（包括 sourceOrgId 自身）构成「可审批机构集」。
+     * 若用户的授权机构（userOrgId）在此集合中，则有权审批。
+     *
+     * @param userId      用户ID
+     * @param moduleCode  模块编码
+     * @param tenantId    租户ID（可为null，表示无租户限制）
+     * @param sourceOrgId 发起机构ID（流程发起时选择的起始机构）
+     * @return true=有权审批，false=无权
+     */
+    @Override
+    public boolean isUserAuthorizedForOrgLevel(Long userId, String moduleCode, Long tenantId, Long sourceOrgId) {
+        // 1. 获取用户在该模块/租户下的授权机构
+        BankOrg userOrg = getAuthorizedOrg(userId, moduleCode, tenantId);
+        if (userOrg == null || userOrg.getId() == null) {
+            // 用户无授权机构，无权审批机构相关节点
+            return false;
+        }
+
+        // 2. sourceOrgId 为空时，默认有权（不需要机构层级判断）
+        if (sourceOrgId == null) {
+            return true;
+        }
+
+        // 3. 从 sourceOrgId 出发，向上构建审批机构路径（到根为止，parentId = 0）
+        List<BankOrg> allOrgs = bankOrgMapper.selectList(new LambdaQueryWrapper<BankOrg>()
+                .eq(BankOrg::getStatus, 1)
+                .orderByAsc(BankOrg::getLevel));
+        Map<Long, BankOrg> orgById = new LinkedHashMap<>();
+        for (BankOrg org : allOrgs) {
+            orgById.put(org.getId(), org);
+        }
+
+        // 收集从 sourceOrgId 到根的所有机构ID（包含 sourceOrgId 自身）
+        List<Long> orgPathToRoot = new ArrayList<>();
+        Long current = sourceOrgId;
+        while (current != null && current != 0L) {
+            orgPathToRoot.add(current);
+            BankOrg currentOrg = orgById.get(current);
+            current = (currentOrg != null && currentOrg.getParentId() != null) ? currentOrg.getParentId() : 0L;
+        }
+
+        // 4. 判断用户授权机构是否在路径上
+        return orgPathToRoot.contains(userOrg.getId());
+    }
 }

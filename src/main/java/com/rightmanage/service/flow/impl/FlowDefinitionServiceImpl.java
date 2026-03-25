@@ -3,6 +3,7 @@ package com.rightmanage.service.flow.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rightmanage.entity.SysRole;
 import com.rightmanage.entity.SysUser;
 import com.rightmanage.entity.flow.FlowDefinition;
 import com.rightmanage.entity.flow.FlowDefinitionDetailDTO;
@@ -12,6 +13,7 @@ import com.rightmanage.mapper.flow.FlowDefinitionMapper;
 import com.rightmanage.mapper.flow.FlowNodeConfigMapper;
 import com.rightmanage.service.flow.FlowDefinitionService;
 import com.rightmanage.service.SysModuleService;
+import com.rightmanage.service.SysRoleService;
 import com.rightmanage.service.SysUserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,8 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     private FlowNodeConfigMapper flowNodeConfigMapper;
     @Autowired
     private SysUserService sysUserService;
+    @Autowired
+    private SysRoleService sysRoleService;
     @Autowired
     private SysModuleService sysModuleService;
 
@@ -322,7 +326,7 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     }
 
     /**
-     * 检查流程是否需要租户（判断是否包含多租户审批节点：handlerType=role 且审批人模块 orgRelated=true）
+     * 检查流程是否需要租户（判断是否包含多租户审批节点：handlerType=role 且审批人模块 multiTenant=1 或 角色 org_related=1）
      */
     @Override
     public boolean checkFlowNeedTenant(Long flowId) {
@@ -335,9 +339,20 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
             // 如果是审批节点且处理人类型为角色
             if ("approve".equals(node.getNodeType()) && "role".equals(node.getHandlerType())
                     && StringUtils.hasText(node.getModuleCode())) {
-                // 检查该模块是否是多租户（orgRelated=true）
+                // 检查该模块是否是多租户
                 if (sysModuleService.isMultiTenant(node.getModuleCode())) {
                     return true;
+                }
+                // 检查所选角色是否有 org_related=1
+                if (StringUtils.hasText(node.getHandlerIds())) {
+                    for (String roleId : node.getHandlerIds().split(",")) {
+                        if (StringUtils.hasText(roleId)) {
+                            SysRole role = sysRoleService.getById(Long.parseLong(roleId.trim()));
+                            if (role != null && Boolean.TRUE.equals(role.getOrgRelated())) {
+                                return true;
+                            }
+                        }
+                    }
                 }
             }
         }
