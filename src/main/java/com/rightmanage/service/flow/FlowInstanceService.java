@@ -86,4 +86,14 @@ public interface FlowInstanceService {
      * @return 通知结果描述
      */
     String triggerNodeNotify(Long instanceId, Long userId);
+
+    /**
+     * 【新增】获取角色+动态用户（role_dynamic_user）节点的候选用户列表
+     * @param moduleCode 模块编码
+     * @param roleIds 逗号分隔的角色ID
+     * @param tenantId 租户ID（可为null）
+     * @param sourceOrgId 发起机构ID（可为null）
+     * @return 符合条件的用户列表（包含 id, username）
+     */
+    List<Map<String, Object>> getRoleDynamicUsers(String moduleCode, String roleIds, Long tenantId, Long sourceOrgId);
 }

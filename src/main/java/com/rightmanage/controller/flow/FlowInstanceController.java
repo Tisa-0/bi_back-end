@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 流程实例控制器
@@ -88,5 +89,22 @@ public class FlowInstanceController {
     @PostMapping("/notify")
     public Result<String> triggerNotify(@RequestParam Long instanceId, @RequestParam Long userId) {
         return Result.success(flowInstanceService.triggerNodeNotify(instanceId, userId));
+    }
+
+    /**
+     * 获取角色+动态用户（role_dynamic_user）节点的候选用户列表
+     * @param moduleCode 模块编码
+     * @param roleIds 逗号分隔的角色ID
+     * @param tenantId 租户ID（可为null）
+     * @param sourceOrgId 发起机构ID（可为null）
+     */
+    @GetMapping("/roleDynamicUsers")
+    public Result<List<Map<String, Object>>> getRoleDynamicUsers(
+            @RequestParam String moduleCode,
+            @RequestParam String roleIds,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) Long sourceOrgId) {
+        return Result.success(
+                flowInstanceService.getRoleDynamicUsers(moduleCode, roleIds, tenantId, sourceOrgId));
     }
 }

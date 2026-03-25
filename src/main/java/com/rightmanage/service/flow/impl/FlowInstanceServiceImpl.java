@@ -204,6 +204,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 dto2.setHandlerName(nc.getHandlerName());
                 dto2.setTenantId(nc.getTenantId());
                 dto2.setSourceOrgId(nc.getSourceOrgId());
+                dto2.setModuleCode(nc.getModuleCode());
                 dynamicHandlerMap.put(nc.getNodeKey(), dto2);
 
                 // 汇总非空的 tenantId（保留到列表，用于 ThreadLocal）
@@ -589,6 +590,32 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private void createApprovalTasks(FlowInstance instance, FlowNodeConfig node,
             Map<String, DynamicHandlerDTO> dynamicHandlerMap) {
 
+        // role_dynamic_user 节点：需要前端已选中审批人，直接用 dynamicHandlerMap 中的值创建任务
+        if ("role_dynamic_user".equals(node.getHandlerType())) {
+            DynamicHandlerDTO nodeHandler = dynamicHandlerMap.get(node.getNodeKey());
+            if (nodeHandler == null || nodeHandler.getHandlerId() == null) {
+                System.out.println("createApprovalTasks - 警告：节点 " + node.getNodeKey() + " 是 role_dynamic_user 类型，但未选中审批人，跳过预分配");
+                return;
+            }
+            // 直接取选中的单个用户创建任务
+            SysUser handler = sysUserService.getById(nodeHandler.getHandlerId());
+            FlowTask task = new FlowTask();
+            task.setInstanceId(instance.getId());
+            task.setNodeKey(node.getNodeKey());
+            task.setNodeName(node.getNodeName());
+            task.setNodeType(node.getNodeType());
+            task.setHandlerId(nodeHandler.getHandlerId());
+            task.setHandlerName(handler != null ? handler.getUsername() : "");
+            task.setStatus(0);
+            task.setTenantId(nodeHandler.getTenantId());
+            task.setSourceOrgId(nodeHandler.getSourceOrgId());
+            flowTaskMapper.insert(task);
+            logService.saveLog(instance.getId(), null, null,
+                    FlowOperationType.INIT.getCode(),
+                    "审批节点[" + node.getNodeName() + "]已分配处理人：" + task.getHandlerName());
+            return;
+        }
+
         // 判断该节点是否为多租户审批（审批人模块是 multiTenant=1 且 handlerType=role）
         Long selectedTenant = null;
         boolean isMultiTenantNode = "role".equals(node.getHandlerType())
@@ -724,7 +751,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         // 模拟通知
         if ("1".equals(node.getEnableNotify())) {
-            String handlerTypeText = "role".equals(node.getHandlerType()) ? "按角色" : ("user".equals(node.getHandlerType()) ? "按用户" : "动态用户");
+            String handlerTypeText = "role".equals(node.getHandlerType()) ? "按角色" : ("user".equals(node.getHandlerType()) ? "按用户" : ("role_dynamic_user".equals(node.getHandlerType()) ? "角色+动态用户" : "动态用户"));
             String notifyContent = node.getNotifyContent() != null ? node.getNotifyContent() : "";
             
             System.out.println("========== 审批节点通知模拟 ==========");
@@ -2005,6 +2032,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 机构层级过滤：仅当 sourceOrgId 不为空时生效。
         // 逻辑说明：从 sourceOrgId 出发，依次向上遍历（parentId），直到根（parentId=0）。
         // 若用户的授权机构在此路径上，则有权审批此任务。
+        // moduleCode 从审批节点配置（flow_node_config.module_code）中读取，而非 flow_definition.module_code。
         List<FlowTask> finalTaskList = new ArrayList<>();
         for (FlowTask t : taskList) {
             Long srcOrg = t.getSourceOrgId();
@@ -2013,19 +2041,20 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 finalTaskList.add(t);
                 continue;
             }
-            // 获取该任务所属的流程模块与租户
             FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
             if (inst == null) {
                 continue;
             }
-            FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
-            if (flow == null) {
-                continue;
-            }
+            // 从审批节点的 module_code 读取，而非 flow_definition.module_code
+            FlowNodeConfig nodeConfig = flowNodeConfigMapper.selectOne(
+                    new LambdaQueryWrapper<FlowNodeConfig>()
+                            .eq(FlowNodeConfig::getFlowId, inst.getFlowId())
+                            .eq(FlowNodeConfig::getNodeKey, t.getNodeKey()));
+            String nodeModuleCode = (nodeConfig != null) ? nodeConfig.getModuleCode() : null;
             Long effectiveTenantId = t.getTenantId() != null ? t.getTenantId() : inst.getTenantId();
             // 调用独立方法判断机构层级权限（便于后续扩展）
             boolean authorized = sysUserService.isUserAuthorizedForOrgLevel(
-                    userId, flow.getModuleCode(), effectiveTenantId, srcOrg);
+                    userId, nodeModuleCode, effectiveTenantId, srcOrg);
             if (authorized) {
                 finalTaskList.add(t);
             }
@@ -2546,7 +2575,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             return "";
         }
 
-        if ("dynamic".equals(nodeConfig.getHandlerType())) {
+        if ("dynamic".equals(nodeConfig.getHandlerType())
+                || "role_dynamic_user".equals(nodeConfig.getHandlerType())) {
+            // dynamic/role_dynamic_user：从运行时配置中取选中的用户ID，不预分配
             if (nodeConfig.getNodeKey() != null && dynamicHandlerMap != null) {
                 DynamicHandlerDTO handler = dynamicHandlerMap.get(nodeConfig.getNodeKey());
                 if (handler != null && handler.getHandlerId() != null) {
@@ -2635,7 +2666,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     names.append(user.getUsername()).append(",");
                 }
             }
-        } else if ("dynamic".equals(nodeConfig.getHandlerType())) {
+        } else if ("dynamic".equals(nodeConfig.getHandlerType())
+                || "role_dynamic_user".equals(nodeConfig.getHandlerType())) {
             if (nodeConfig.getNodeKey() != null && dynamicHandlerMap != null) {
                 DynamicHandlerDTO handler = dynamicHandlerMap.get(nodeConfig.getNodeKey());
                 if (handler != null && handler.getHandlerName() != null) {
@@ -2844,5 +2876,71 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 currentNode.getNodeName(), notifyTypeText, handlerTypeText, handlerNames,
                 notifyContent.isEmpty() ? "（未填写）" : notifyContent, timestamp
         );
+    }
+
+    /**
+     * 获取角色+动态用户（role_dynamic_user）节点的候选用户列表
+     * 根据 moduleCode + roleIds + tenantId 查出用户，再通过机构层级过滤
+     */
+    @Override
+    public List<Map<String, Object>> getRoleDynamicUsers(String moduleCode, String roleIds,
+            Long tenantId, Long sourceOrgId) {
+        if (!StringUtils.hasText(roleIds)) {
+            return new java.util.ArrayList<>();
+        }
+
+        // 1. 根据角色ID列表查出用户
+        LambdaQueryWrapper<SysUserRole> queryWrapper = new LambdaQueryWrapper<>();
+        List<Long> roleIdList = new ArrayList<>();
+        for (String r : roleIds.split(",")) {
+            if (StringUtils.hasText(r)) {
+                roleIdList.add(Long.parseLong(r.trim()));
+            }
+        }
+        if (roleIdList.isEmpty()) {
+            return new ArrayList<>();
+        }
+        queryWrapper.in(SysUserRole::getRoleId, roleIdList);
+        if (tenantId != null) {
+            queryWrapper.eq(SysUserRole::getTenantId, tenantId);
+        }
+
+        List<SysUserRole> userRoles = sysUserRoleMapper.selectList(queryWrapper);
+        if (userRoles.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 2. 去重 + 收集用户ID
+        Set<Long> userIdSet = userRoles.stream()
+                .map(SysUserRole::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        // 3. 机构层级过滤（sourceOrgId != null 时）
+        if (sourceOrgId != null && StringUtils.hasText(moduleCode)) {
+            for (Long uid : new ArrayList<>(userIdSet)) {
+                boolean authorized = sysUserService.isUserAuthorizedForOrgLevel(
+                        uid, moduleCode, tenantId, sourceOrgId);
+                if (!authorized) {
+                    userIdSet.remove(uid);
+                }
+            }
+        }
+
+        if (userIdSet.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 4. 查询用户信息
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Long uid : userIdSet) {
+            SysUser u = sysUserService.getById(uid);
+            if (u != null) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("id", u.getId());
+                item.put("username", u.getUsername());
+                result.add(item);
+            }
+        }
+        return result;
     }
 }
