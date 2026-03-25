@@ -858,3 +858,38 @@ INSERT INTO `sys_user_org_auth` VALUES (3, 1, 'bi_wx_product', 2, 151, '2026-03-
 INSERT INTO `sys_role_menu` VALUES (335, 1, 301, 'A', '2026-03-24 10:00:00', NULL);
 INSERT INTO `sys_role_menu` VALUES (336, 2, 302, 'B', '2026-03-24 10:00:00', NULL);
 INSERT INTO `sys_role_menu` VALUES (337, 6, 303, 'C', '2026-03-24 10:00:00', NULL);
+
+-- ----------------------------
+-- Table structure for asset_type
+-- ----------------------------
+DROP TABLE IF EXISTS `asset_type`;
+CREATE TABLE `asset_type` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `parent_id` bigint(20) NOT NULL DEFAULT 0 COMMENT '父级ID，0=顶级',
+  `type_name` varchar(64) NOT NULL COMMENT '资产类型名称',
+  `type_code` varchar(64) NOT NULL COMMENT '资产类型编码（全局唯一）',
+  `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序号',
+  `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1=启用 0=禁用',
+  `remark` varchar(255) DEFAULT NULL COMMENT '备注',
+  `create_by` varchar(64) DEFAULT NULL COMMENT '创建人',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_by` varchar(64) DEFAULT NULL COMMENT '更新人',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT 0 COMMENT '删除标志 0=未删除 1=已删除',
+  `module_code` varchar(50) NOT NULL DEFAULT '' COMMENT '所属模块编码',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_type_code` (`type_code`,`is_deleted`) COMMENT '编码唯一',
+  KEY `idx_parent_id` (`parent_id`) COMMENT '父级索引',
+  KEY `idx_module_code` (`module_code`) COMMENT '模块索引'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产类型表';
+
+-- ----------------------------
+-- Records of asset_type（示例数据）
+-- ----------------------------
+INSERT INTO `asset_type` VALUES (1, 0, '服务器', 'SERVER', 1, 1, '物理及虚拟服务器', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (2, 0, '网络设备', 'NETWORK', 2, 1, '路由器、交换机等', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (3, 0, '软件资产', 'SOFTWARE', 3, 1, '各类软件许可证', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (4, 1, '云服务器', 'SERVER_CLOUD', 1, 1, '阿里云、腾讯云等云服务器', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (5, 4, 'ECS实例', 'SERVER_CLOUD_ECS', 1, 1, '阿里云ECS实例', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (6, 2, '交换机', 'NETWORK_SWITCH', 1, 1, '企业级交换机', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (7, 3, '操作系统', 'SOFTWARE_OS', 1, 1, 'Windows、Linux等操作系统', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
