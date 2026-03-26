@@ -265,4 +265,12 @@ public interface FlowCommonService {
      * @param operationDesc 操作描述
      */
     void saveFlowLog(Long instanceId, Long userId, String operationType, String operationDesc);
+
+    /**
+     * 【新增】统一查询接口
+     * 根据 queryType 分发到待办任务/我的审批/我的流转
+     * @param dto 查询参数
+     * @return 统一查询结果
+     */
+    FlowQueryResultVO<?> queryFlow(FlowQueryDTO dto);
 }

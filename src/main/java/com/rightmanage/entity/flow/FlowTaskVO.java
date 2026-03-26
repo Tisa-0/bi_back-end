@@ -10,8 +10,9 @@ import java.util.Date;
 public class FlowTaskVO {
     private Long id;
     private Long instanceId;
-    private String instanceName;
+    private Long flowId;  // 流程定义ID（用于前端查询流程详情）
     private String flowName;
+    private String instanceName;
     private String nodeKey;
     private String nodeName;
     private String currentNodeName; // 当前节点名称（前端显示用）
@@ -30,4 +31,6 @@ public class FlowTaskVO {
     private String tenantName; // 多租户审批节点的任务归属租户名称
     private Long sourceOrgId; // 发起机构ID（orgRelated节点有效）
     private String sourceOrgName; // 发起机构名称（前端展示用）
+    private String assetTypeName; // 资产类型名称
+    private String typeCode;       // 资产类型编码
 }

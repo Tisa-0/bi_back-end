@@ -28,12 +28,14 @@ public class FlowTaskController {
     public Result<IPage<FlowTaskVO>> pending(
             @RequestParam Long userId,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String tenantCode,
             @RequestParam(required = false) Long flowId,
+            @RequestParam(required = false) String typeCode,
+            @RequestParam(required = false) String nodeKey,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
         // taskStatus = 0 表示待处理
-        return Result.success(flowInstanceService.myApproval(userId, 0, moduleCode, tenantId, flowId, pageNum, pageSize));
+        return Result.success(flowInstanceService.myApproval(userId, 0, moduleCode, tenantCode, flowId, typeCode, nodeKey, pageNum, pageSize));
     }
 
     /**
@@ -44,11 +46,13 @@ public class FlowTaskController {
             @RequestParam Long userId,
             @RequestParam Integer taskStatus,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String tenantCode,
             @RequestParam(required = false) Long flowId,
+            @RequestParam(required = false) String typeCode,
+            @RequestParam(required = false) String nodeKey,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(flowInstanceService.myApproval(userId, taskStatus, moduleCode, tenantId, flowId, pageNum, pageSize));
+        return Result.success(flowInstanceService.myApproval(userId, taskStatus, moduleCode, tenantCode, flowId, typeCode, nodeKey, pageNum, pageSize));
     }
 
     /**
@@ -58,5 +62,24 @@ public class FlowTaskController {
     public Result<?> approve(@RequestBody FlowApproveDTO dto) {
         flowInstanceService.approveFlow(dto.getTaskId(), dto.getAction(), dto.getComment(), dto.getUserId());
         return Result.success();
+    }
+
+    /**
+     * 【管理员】查询所有在途流程任务（不分用户权限限制）
+     * 用于流程管理后台页面，管理员可查看/审批所有流程任务
+     */
+    @GetMapping("/admin/all")
+    public Result<IPage<FlowTaskVO>> adminAllTasks(
+            @RequestParam(required = false) Integer taskStatus,
+            @RequestParam(required = false) String moduleCode,
+            @RequestParam(required = false) String tenantCode,
+            @RequestParam(required = false) Long flowId,
+            @RequestParam(required = false) String flowCode,
+            @RequestParam(required = false) String typeCode,
+            @RequestParam(required = false) String nodeKey,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(flowInstanceService.adminAllTasks(
+                taskStatus, moduleCode, tenantCode, flowId, flowCode, typeCode, nodeKey, pageNum, pageSize));
     }
 }

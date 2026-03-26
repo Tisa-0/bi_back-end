@@ -1,7 +1,6 @@
 package com.rightmanage.controller;
 
 import com.rightmanage.common.Result;
-import com.rightmanage.dto.AssetTypeTreeVO;
 import com.rightmanage.entity.AssetType;
 import com.rightmanage.service.AssetTypeService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,22 +16,14 @@ public class AssetTypeController {
     private AssetTypeService assetTypeService;
 
     /**
-     * 获取树形列表（用于表格展示）
+     * 获取列表（用于表格展示）
      */
-    @GetMapping("/tree")
-    public Result<List<AssetTypeTreeVO>> tree(@RequestParam(required = false) String moduleCode) {
+    @GetMapping("/list")
+    public Result<List<AssetType>> list(@RequestParam(required = false) String moduleCode) {
         if (moduleCode != null && !moduleCode.isEmpty()) {
-            return Result.success(assetTypeService.getTreeByModuleCode(moduleCode));
+            return Result.success(assetTypeService.listByModuleCode(moduleCode));
         }
-        return Result.success(assetTypeService.getTree());
-    }
-
-    /**
-     * 获取下拉树选项（用于新增/编辑时的父级选择）
-     */
-    @GetMapping("/treeOptions")
-    public Result<List<AssetTypeTreeVO>> treeOptions(@RequestParam(required = false) String moduleCode) {
-        return Result.success(assetTypeService.getTreeOptions(moduleCode));
+        return Result.success(assetTypeService.listAll());
     }
 
     /**
@@ -79,15 +70,6 @@ public class AssetTypeController {
     @DeleteMapping("/{id}")
     public Result<?> delete(@PathVariable Long id) {
         assetTypeService.delete(id);
-        return Result.success();
-    }
-
-    /**
-     * 级联删除（含所有子节点）
-     */
-    @DeleteMapping("/cascade/{id}")
-    public Result<?> deleteCascade(@PathVariable Long id) {
-        assetTypeService.deleteCascade(id);
         return Result.success();
     }
 

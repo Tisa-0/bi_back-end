@@ -29,7 +29,7 @@ public class SysAssetServiceImpl implements SysAssetService {
         if (keyword != null && !keyword.isEmpty()) {
             wrapper.and(w -> w.like(SysAsset::getAssetName, keyword)
                     .or().like(SysAsset::getAssetCode, keyword)
-                    .or().like(SysAsset::getAssetType, keyword));
+                    .or().like(SysAsset::getAssetDesc, keyword));
         }
         
         wrapper.orderByDesc(SysAsset::getCreateTime);
@@ -37,13 +37,14 @@ public class SysAssetServiceImpl implements SysAssetService {
     }
 
     @Override
-    public List<SysAsset> listAvailableAssets(String moduleCode, Long userId) {
-        // 查询指定模块下的所有可用资产
+    public List<SysAsset> listAvailableAssets(String moduleCode, Long typeId, Long tenantId, Long userId) {
         LambdaQueryWrapper<SysAsset> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysAsset::getModuleCode, moduleCode)
                .eq(SysAsset::getStatus, 1)
+               .eq(typeId != null, SysAsset::getTypeId, typeId)
+               .eq(tenantId != null, SysAsset::getTenantId, tenantId)
                .orderByAsc(SysAsset::getAssetCode);
-        
+
         return sysAssetMapper.selectList(wrapper);
     }
 
@@ -79,5 +80,32 @@ public class SysAssetServiceImpl implements SysAssetService {
         }
         
         return sysAssetMapper.selectCount(wrapper) == 0;
+    }
+
+    @Override
+    public IPage<SysAsset> pageAllocatedAssets(Integer pageNum, Integer pageSize,
+            String moduleCode, Long typeId, Long tenantId) {
+        Page<SysAsset> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<SysAsset> wrapper = new LambdaQueryWrapper<>();
+        
+        wrapper.eq(moduleCode != null, SysAsset::getModuleCode, moduleCode);
+        wrapper.eq(typeId != null, SysAsset::getTypeId, typeId);
+        wrapper.eq(tenantId != null, SysAsset::getTenantId, tenantId);
+        
+        wrapper.orderByDesc(SysAsset::getCreateTime);
+        return sysAssetMapper.selectPage(page, wrapper);
+    }
+
+    @Override
+    public boolean saveAllocatedAsset(SysAsset asset) {
+        if (asset.getStatus() == null) {
+            asset.setStatus(1);
+        }
+        return sysAssetMapper.insert(asset) > 0;
+    }
+
+    @Override
+    public boolean deleteAllocatedAsset(Long id) {
+        return sysAssetMapper.deleteById(id) > 0;
     }
 }

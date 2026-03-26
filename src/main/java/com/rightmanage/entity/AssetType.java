@@ -12,7 +12,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 资产类型实体（支持树形结构）
+ * 资产类型实体
  */
 @Data
 @TableName("asset_type")
@@ -21,11 +21,6 @@ public class AssetType implements Serializable {
 
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
-
-    /**
-     * 父级ID，0=顶级
-     */
-    private Long parentId;
 
     /**
      * 资产类型名称

@@ -49,4 +49,7 @@ public class FlowDefinition implements Serializable {
 
     // 流程所属模块（A/B/C）
     private String moduleCode;
+
+    // 流程所属资产类型ID（asset_type.id）
+    private Long assetTypeId;
 }

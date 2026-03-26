@@ -29,12 +29,12 @@ public interface FlowInstanceService {
     /**
      * 获取我的流转（发起的流程）- 分页
      */
-    IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, Long tenantId, Long flowId, Integer pageNum, Integer pageSize);
+    IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, String tenantCode, Long flowId, String typeCode, String currentNodeKey, Integer pageNum, Integer pageSize);
 
     /**
      * 获取我的审批（待处理/已处理任务）- 分页
      */
-    IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, Long tenantId, Long flowId, Integer pageNum, Integer pageSize);
+    IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, String tenantCode, Long flowId, String typeCode, String nodeKey, Integer pageNum, Integer pageSize);
 
     /**
      * 获取流程详情
@@ -96,4 +96,28 @@ public interface FlowInstanceService {
      * @return 符合条件的用户列表（包含 id, username）
      */
     List<Map<String, Object>> getRoleDynamicUsers(String moduleCode, String roleIds, Long tenantId, Long sourceOrgId);
+
+    /**
+     * 【新增】统一查询接口
+     * @param dto 查询参数（包含 queryType 决定查询类型）
+     * @return 统一查询结果
+     */
+    FlowQueryResultVO<?> queryFlow(FlowQueryDTO dto);
+
+    /**
+     * 【管理员】查询所有在途流程任务（不分用户权限限制）
+     * @param taskStatus 任务状态（0=待处理 1=已处理 2=已驳回 3=业务执行中 4=逻辑处理失败 5=已跳过）
+     * @param moduleCode 模块编码（可选）
+     * @param tenantCode 租户编码（可选）
+     * @param flowId 流程定义ID（可选）
+     * @param flowCode 流程定义编码（可选，与flowId二选一）
+     * @param typeCode 资产类型编码（可选）
+     * @param nodeKey 审批节点Key（可选）
+     * @param pageNum 页码
+     * @param pageSize 每页条数
+     * @return 分页任务列表
+     */
+    IPage<FlowTaskVO> adminAllTasks(Integer taskStatus, String moduleCode, String tenantCode,
+                                     Long flowId, String flowCode, String typeCode, String nodeKey,
+                                     Integer pageNum, Integer pageSize);
 }

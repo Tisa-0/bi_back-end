@@ -3,7 +3,9 @@ package com.rightmanage.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.rightmanage.common.Result;
 import com.rightmanage.entity.SysAsset;
+import com.rightmanage.entity.SysTenant;
 import com.rightmanage.service.SysAssetService;
+import com.rightmanage.service.SysTenantService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,6 +17,9 @@ public class SysAssetController {
 
     @Autowired
     private SysAssetService sysAssetService;
+
+    @Autowired
+    private SysTenantService sysTenantService;
 
     /**
      * 分页查询资产列表
@@ -29,13 +34,16 @@ public class SysAssetController {
     }
 
     /**
-     * 查询可用资产列表（可绑定给用户的资产）
+     * 查询可用资产列表（可绑定给用户的资产，支持按 typeId / tenantCode 过滤）
      */
     @GetMapping("/available")
     public Result<List<SysAsset>> available(
             @RequestParam String moduleCode,
+            @RequestParam(required = false) Long typeId,
+            @RequestParam(required = false) String tenantCode,
             @RequestParam(required = false) Long userId) {
-        return Result.success(sysAssetService.listAvailableAssets(moduleCode, userId));
+        Long tenantId = resolveTenantId(tenantCode);
+        return Result.success(sysAssetService.listAvailableAssets(moduleCode, typeId, tenantId, userId));
     }
 
     /**
@@ -47,7 +55,7 @@ public class SysAssetController {
     }
 
     /**
-     * 新增资产
+     * 新增资产（通用接口，/asset 走此方法）
      */
     @PostMapping
     public Result<?> add(@RequestBody SysAsset asset) {
@@ -77,5 +85,51 @@ public class SysAssetController {
     public Result<?> delete(@PathVariable Long id) {
         sysAssetService.deleteById(id);
         return Result.success();
+    }
+
+    /**
+     * 分页查询指定模块+资产类型下已分配的资产
+     * GET /asset/allocated/page?moduleCode=&typeId=&tenantId=&pageNum=1&pageSize=10
+     */
+    @GetMapping("/allocated/page")
+    public Result<IPage<SysAsset>> pageAllocatedAssets(
+            @RequestParam(required = false) String moduleCode,
+            @RequestParam(required = false) Long typeId,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(sysAssetService.pageAllocatedAssets(
+                pageNum, pageSize, moduleCode, typeId, tenantId));
+    }
+
+    /**
+     * 新增分配资产
+     * POST /asset/allocate
+     */
+    @PostMapping("/allocate")
+    public Result<?> allocate(@RequestBody SysAsset asset) {
+        if (!sysAssetService.isAssetCodeUnique(asset.getModuleCode(), asset.getAssetCode(), null)) {
+            return Result.error("资产编码在该模块下已存在");
+        }
+        sysAssetService.saveAllocatedAsset(asset);
+        return Result.success();
+    }
+
+    /**
+     * 删除已分配的资产
+     * DELETE /asset/allocated/{id}
+     */
+    @DeleteMapping("/allocated/{id}")
+    public Result<?> deleteAllocated(@PathVariable Long id) {
+        sysAssetService.deleteAllocatedAsset(id);
+        return Result.success();
+    }
+
+    private Long resolveTenantId(String tenantCode) {
+        if (tenantCode == null || tenantCode.trim().isEmpty()) {
+            return null;
+        }
+        SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
+        return tenant != null ? tenant.getId() : null;
     }
 }

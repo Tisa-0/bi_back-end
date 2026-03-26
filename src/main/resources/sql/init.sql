@@ -17,6 +17,7 @@ CREATE TABLE `flow_definition`  (
   `deleted` tinyint(4) NULL DEFAULT 0 COMMENT '逻辑删除',
   `need_attachment` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
   `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '流程所属模块（A/B/C）',
+  `asset_type_id` bigint(20) NULL DEFAULT NULL COMMENT '流程所属资产类型ID（asset_type.id）',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_flow_code`(`flow_code`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程定义表' ROW_FORMAT = Compact;
@@ -218,19 +219,21 @@ INSERT INTO `sys_api` VALUES (33, '/api/module/list', '获取模块列表', NULL
 DROP TABLE IF EXISTS `sys_asset`;
 CREATE TABLE `sys_asset`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '资产ID',
-  `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属模块（A/B/C）',
+  `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属模块（A/B/C/bi_workstation/bi_wx_product）',
+  `type_id` bigint(20) NOT NULL COMMENT '关联资产类型ID（asset_type.id）',
+  `tenant_id` bigint(20) NULL DEFAULT NULL COMMENT '所属租户ID（多租户模块使用，为null表示全局资产）',
   `asset_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '资产名称',
-  `asset_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '资产编码',
-  `asset_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '资产类型（如设备、权限、资源）',
+  `asset_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '资产编码',
   `asset_desc` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '资产描述',
+  `custom_params` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '自定义参数（JSON格式）',
   `status` tinyint(1) NULL DEFAULT 1 COMMENT '状态（1启用 0禁用）',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` int(11) NULL DEFAULT 0 COMMENT '逻辑删除(0未删除1已删除)',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_asset_code`(`module_code`, `asset_code`) USING BTREE COMMENT '模块+资产编码唯一索引',
-  INDEX `idx_module_code`(`module_code`) USING BTREE COMMENT '模块索引'
-) ENGINE = InnoDB AUTO_INCREMENT = 17 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '资产库表' ROW_FORMAT = Compact;
+  INDEX `idx_module_type`(`module_code`, `type_id`) USING BTREE COMMENT '模块+类型索引',
+  INDEX `idx_tenant`(`tenant_id`) USING BTREE COMMENT '租户索引'
+) ENGINE = InnoDB AUTO_INCREMENT = 17 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '资产库表（按模块+资产类型+租户隔离，custom_params存额外配置信息）' ROW_FORMAT = Compact;
 
 
 -- ----------------------------
@@ -708,12 +711,14 @@ CREATE TABLE `sys_user_asset`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `user_id` bigint(20) NOT NULL COMMENT '关联用户ID',
   `asset_id` bigint(20) NOT NULL COMMENT '关联资产ID',
-  `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属模块（A/B/C）',
+  `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '所属模块（A/B/C/bi_workstation/bi_wx_product）',
+  `type_id` bigint(20) NOT NULL DEFAULT 0 COMMENT '关联资产类型ID（冗余存储）',
+  `tenant_id` bigint(20) NULL DEFAULT NULL COMMENT '所属租户ID（冗余存储，多租户模块使用）',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_user_asset`(`user_id`, `asset_id`) USING BTREE COMMENT '用户+资产唯一索引',
-  INDEX `idx_user_module`(`user_id`, `module_code`) USING BTREE COMMENT '用户+模块索引'
-) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '用户资产关联表' ROW_FORMAT = Compact;
+  INDEX `idx_user_module`(`user_id`, `module_code`) USING BTREE COMMENT '用户+模块索引',
+  INDEX `idx_user_tenant`(`user_id`, `tenant_id`) USING BTREE COMMENT '用户+租户索引'
+) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '用户资产关联表（type_id/tenant_id冗余存储，方便按维度过滤）' ROW_FORMAT = Compact;
 
 
 -- ----------------------------
@@ -865,7 +870,6 @@ INSERT INTO `sys_role_menu` VALUES (337, 6, 303, 'C', '2026-03-24 10:00:00', NUL
 DROP TABLE IF EXISTS `asset_type`;
 CREATE TABLE `asset_type` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `parent_id` bigint(20) NOT NULL DEFAULT 0 COMMENT '父级ID，0=顶级',
   `type_name` varchar(64) NOT NULL COMMENT '资产类型名称',
   `type_code` varchar(64) NOT NULL COMMENT '资产类型编码（全局唯一）',
   `sort` int(11) NOT NULL DEFAULT 0 COMMENT '排序号',
@@ -879,17 +883,16 @@ CREATE TABLE `asset_type` (
   `module_code` varchar(50) NOT NULL DEFAULT '' COMMENT '所属模块编码',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_type_code` (`type_code`,`is_deleted`) COMMENT '编码唯一',
-  KEY `idx_parent_id` (`parent_id`) COMMENT '父级索引',
   KEY `idx_module_code` (`module_code`) COMMENT '模块索引'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产类型表';
 
 -- ----------------------------
 -- Records of asset_type（示例数据）
 -- ----------------------------
-INSERT INTO `asset_type` VALUES (1, 0, '服务器', 'SERVER', 1, 1, '物理及虚拟服务器', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
-INSERT INTO `asset_type` VALUES (2, 0, '网络设备', 'NETWORK', 2, 1, '路由器、交换机等', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
-INSERT INTO `asset_type` VALUES (3, 0, '软件资产', 'SOFTWARE', 3, 1, '各类软件许可证', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
-INSERT INTO `asset_type` VALUES (4, 1, '云服务器', 'SERVER_CLOUD', 1, 1, '阿里云、腾讯云等云服务器', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
-INSERT INTO `asset_type` VALUES (5, 4, 'ECS实例', 'SERVER_CLOUD_ECS', 1, 1, '阿里云ECS实例', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
-INSERT INTO `asset_type` VALUES (6, 2, '交换机', 'NETWORK_SWITCH', 1, 1, '企业级交换机', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
-INSERT INTO `asset_type` VALUES (7, 3, '操作系统', 'SOFTWARE_OS', 1, 1, 'Windows、Linux等操作系统', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (1, '服务器', 'SERVER', 1, 1, '物理及虚拟服务器', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (2, '网络设备', 'NETWORK', 2, 1, '路由器、交换机等', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (3, '软件资产', 'SOFTWARE', 3, 1, '各类软件许可证', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (4, '云服务器', 'SERVER_CLOUD', 1, 1, '阿里云、腾讯云等云服务器', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (5, 'ECS实例', 'SERVER_CLOUD_ECS', 1, 1, '阿里云ECS实例', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (6, '交换机', 'NETWORK_SWITCH', 1, 1, '企业级交换机', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');
+INSERT INTO `asset_type` VALUES (7, '操作系统', 'SOFTWARE_OS', 1, 1, 'Windows、Linux等操作系统', NULL, '2026-03-24 10:00:00', NULL, '2026-03-24 10:00:00', 0, 'BI_WORKSTATION');

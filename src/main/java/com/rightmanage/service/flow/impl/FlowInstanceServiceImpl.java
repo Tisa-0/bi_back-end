@@ -9,10 +9,12 @@ import com.rightmanage.entity.SysUser;
 import com.rightmanage.entity.SysRole;
 import com.rightmanage.entity.SysUserRole;
 import com.rightmanage.entity.SysTenant;
+import com.rightmanage.entity.AssetType;
 import com.rightmanage.entity.flow.*;
 import com.rightmanage.mapper.flow.*;
 import com.rightmanage.mapper.BankOrgMapper;
 import com.rightmanage.mapper.SysUserRoleMapper;
+import com.rightmanage.mapper.AssetTypeMapper;
 import com.rightmanage.service.flow.FlowInstanceService;
 import com.rightmanage.service.flow.FlowDefinitionService;
 import com.rightmanage.service.flow.FlowCommonService;
@@ -142,6 +144,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private SysModuleService sysModuleService;
     @Autowired
     private BankOrgMapper bankOrgMapper;
+    @Autowired
+    private AssetTypeMapper assetTypeMapper;
     @Autowired
     private FlowTemplateParamMapper flowTemplateParamMapper;
     @Autowired
@@ -1877,6 +1881,18 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             throw new RuntimeException("只有申请人才能撤销流程");
         }
 
+        // 检查是否已有节点审批过：有任意一个审批节点（type=approve）状态为 1（已通过）则不允许撤销
+        Long approvedCount = flowTaskMapper.selectCount(
+                new LambdaQueryWrapper<FlowTask>()
+                        .eq(FlowTask::getInstanceId, instanceId)
+                        .eq(FlowTask::getNodeType, "approve")
+                        .eq(FlowTask::getStatus, 1)
+                        .eq(FlowTask::getDeleted, 0)
+        );
+        if (approvedCount != null && approvedCount > 0) {
+            throw new RuntimeException("该流程已有节点审批通过，不允许撤销");
+        }
+
         instance.setStatus(FlowInstanceStatus.CANCELED.getCode());
         flowInstanceMapper.updateById(instance);
 
@@ -1903,7 +1919,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, Long tenantId, Long flowId, Integer pageNum, Integer pageSize) {
+    public IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, String tenantCode, Long flowId, String typeCode, String currentNodeKey, Integer pageNum, Integer pageSize) {
         Page<FlowInstance> page = new Page<>(pageNum, pageSize);
 
         LambdaQueryWrapper<FlowInstance> wrapper = new LambdaQueryWrapper<FlowInstance>()
@@ -1915,8 +1931,16 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             wrapper.eq(FlowInstance::getFlowId, flowId);
         }
 
-        if (tenantId != null) {
-            wrapper.eq(FlowInstance::getTenantId, tenantId);
+        if (tenantCode != null && !tenantCode.isEmpty()) {
+            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
+            if (tenant != null) {
+                wrapper.eq(FlowInstance::getTenantId, tenant.getId());
+            }
+        }
+
+        // 按当前审批节点过滤
+        if (StringUtils.hasText(currentNodeKey)) {
+            wrapper.eq(FlowInstance::getCurrentNodeKey, currentNodeKey);
         }
 
         IPage<FlowInstance> instancePage = flowInstanceMapper.selectPage(page, wrapper);
@@ -1933,6 +1957,22 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             instanceList = filteredList;
         }
 
+        // 按资产类型编码过滤
+        if (typeCode != null && !typeCode.isEmpty()) {
+            AssetType assetType = assetTypeMapper.selectOne(new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
+            if (assetType != null) {
+                Long targetAssetTypeId = assetType.getId();
+                List<FlowInstance> filteredList = new ArrayList<>();
+                for (FlowInstance inst : instanceList) {
+                    FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                    if (flow != null && targetAssetTypeId.equals(flow.getAssetTypeId())) {
+                        filteredList.add(inst);
+                    }
+                }
+                instanceList = filteredList;
+            }
+        }
+
         List<FlowInstanceVO> voList = new ArrayList<>();
         for (FlowInstance inst : instanceList) {
             FlowInstanceVO vo = new FlowInstanceVO();
@@ -1943,6 +1983,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 vo.setFlowName(flow.getFlowName());
                 if (moduleCode != null && !moduleCode.isEmpty() && !moduleCode.equals(flow.getModuleCode())) {
                     continue;
+                }
+                // 填充资产类型信息
+                if (flow.getAssetTypeId() != null) {
+                    AssetType assetType = assetTypeMapper.selectById(flow.getAssetTypeId());
+                    if (assetType != null) {
+                        vo.setTypeCode(assetType.getTypeCode());
+                        vo.setAssetTypeName(assetType.getTypeName());
+                    }
                 }
             }
 
@@ -1969,7 +2017,23 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 if (currentNode != null && FlowNodeType.APPROVE.getCode().equals(currentNode.getNodeType())) {
                     vo.setEnableNotify(currentNode.getEnableNotify());
                     vo.setNotifyType(currentNode.getNotifyType());
+                    // 填充当前节点数据库主键（用于前端加载节点详情）
+                    vo.setCurrentNodeId(currentNode.getId());
                 }
+            }
+
+            // 是否可撤回：运行中 且 未有任何审批节点（type=approve）审批通过（status=1）
+            if (FlowInstanceStatus.RUNNING.getCode().equals(inst.getStatus())) {
+                Long approvedCount = flowTaskMapper.selectCount(
+                        new LambdaQueryWrapper<FlowTask>()
+                                .eq(FlowTask::getInstanceId, inst.getId())
+                                .eq(FlowTask::getNodeType, "approve")
+                                .eq(FlowTask::getStatus, 1)
+                                .eq(FlowTask::getDeleted, 0)
+                );
+                vo.setCanCancel(approvedCount == null || approvedCount == 0);
+            } else {
+                vo.setCanCancel(false);
             }
 
             voList.add(vo);
@@ -1983,24 +2047,39 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, Long tenantId, Long flowId, Integer pageNum, Integer pageSize) {
+    public IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, String tenantCode, Long flowId, String typeCode, String nodeKey, Integer pageNum, Integer pageSize) {
         Page<FlowTask> page = new Page<>(pageNum, pageSize);
 
-        // 多租户过滤：如果传了 tenantId（前端指定了要查看的租户），只看该租户的任务
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
                 .eq(FlowTask::getHandlerId, userId)
                 .eq(FlowTask::getStatus, taskStatus)
                 .eq(FlowTask::getDeleted, 0);
-        if (tenantId != null) {
-            wrapper.and(w -> w.eq(FlowTask::getTenantId, tenantId).or().isNull(FlowTask::getTenantId));
+
+        if (tenantCode != null && !tenantCode.isEmpty()) {
+            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
+            if (tenant != null) {
+                wrapper.and(w -> w.eq(FlowTask::getTenantId, tenant.getId()).or().isNull(FlowTask::getTenantId));
+            }
+        }
+        // 按审批节点过滤
+        if (StringUtils.hasText(nodeKey)) {
+            wrapper.eq(FlowTask::getNodeKey, nodeKey);
         }
         wrapper.orderByDesc(FlowTask::getCreateTime);
 
         IPage<FlowTask> taskPage = flowTaskMapper.selectPage(page, wrapper);
         List<FlowTask> taskList = taskPage.getRecords();
 
-        // 按模块/流程过滤（用于前端筛选展示）
-        if ((moduleCode != null && !moduleCode.isEmpty()) || tenantId != null || flowId != null) {
+        // 按模块/流程/资产类型过滤（用于前端筛选展示）
+        if ((moduleCode != null && !moduleCode.isEmpty()) || (tenantCode != null && !tenantCode.isEmpty()) || flowId != null || (typeCode != null && !typeCode.isEmpty())) {
+            AssetType typeFilterAssetType = null;
+            if (typeCode != null && !typeCode.isEmpty()) {
+                typeFilterAssetType = assetTypeMapper.selectOne(new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
+            }
+            SysTenant tenantFilter = null;
+            if (tenantCode != null && !tenantCode.isEmpty()) {
+                tenantFilter = sysTenantService.getByTenantCode(tenantCode);
+            }
             List<FlowTask> filteredTasks = new ArrayList<>();
             for (FlowTask t : taskList) {
                 FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
@@ -2012,7 +2091,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 if (effectiveTenantId == null) {
                     effectiveTenantId = inst.getTenantId();
                 }
-                if (tenantId != null && !tenantId.equals(effectiveTenantId)) {
+                if (tenantFilter != null && !tenantFilter.getId().equals(effectiveTenantId)) {
                     continue;
                 }
                 FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
@@ -2021,6 +2100,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         continue;
                     }
                     if (flowId != null && !flowId.equals(flow.getId())) {
+                        continue;
+                    }
+                    if (typeFilterAssetType != null && !typeFilterAssetType.getId().equals(flow.getAssetTypeId())) {
                         continue;
                     }
                     filteredTasks.add(t);
@@ -2068,6 +2150,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
             if (inst != null) {
+                vo.setFlowId(inst.getFlowId());
                 FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
                 vo.setFlowName(flow != null ? flow.getFlowName() : "");
                 vo.setInstanceName(inst.getInstanceName());
@@ -2089,11 +2172,120 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     BankOrg srcOrg = bankOrgMapper.selectById(t.getSourceOrgId());
                     vo.setSourceOrgName(srcOrg != null ? srcOrg.getName() : "");
                 }
+                // 填充资产类型信息
+                if (flow != null && flow.getAssetTypeId() != null) {
+                    AssetType assetType = assetTypeMapper.selectById(flow.getAssetTypeId());
+                    if (assetType != null) {
+                        vo.setTypeCode(assetType.getTypeCode());
+                        vo.setAssetTypeName(assetType.getTypeName());
+                    }
+                }
             }
 
             vo.setCurrentNodeName(t.getNodeName());
             vo.setCreateTime(t.getCreateTime());
 
+            voList.add(vo);
+        }
+
+        Page<FlowTaskVO> resultPage = new Page<>(taskPage.getCurrent(), taskPage.getSize(), voList.size());
+        resultPage.setRecords(voList);
+        resultPage.setTotal(taskPage.getTotal());
+
+        return resultPage;
+    }
+
+    @Override
+    public IPage<FlowTaskVO> adminAllTasks(Integer taskStatus, String moduleCode, String tenantCode,
+                                           Long flowId, String flowCode, String typeCode, String nodeKey,
+                                           Integer pageNum, Integer pageSize) {
+        Page<FlowTask> page = new Page<>(pageNum, pageSize);
+
+        // 不限制 handlerId，获取所有任务
+        LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
+                .eq(taskStatus != null, FlowTask::getStatus, taskStatus)
+                .eq(FlowTask::getDeleted, 0);
+
+        if (StringUtils.hasText(tenantCode)) {
+            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
+            if (tenant != null) {
+                wrapper.and(w -> w.eq(FlowTask::getTenantId, tenant.getId()).or().isNull(FlowTask::getTenantId));
+            }
+        }
+        if (StringUtils.hasText(nodeKey)) {
+            wrapper.eq(FlowTask::getNodeKey, nodeKey);
+        }
+        wrapper.orderByDesc(FlowTask::getCreateTime);
+
+        IPage<FlowTask> taskPage = flowTaskMapper.selectPage(page, wrapper);
+        List<FlowTask> taskList = taskPage.getRecords();
+
+        // 解析 flowId / flowCode，并按模块/流程/资产类型过滤
+        Long resolvedFlowId = resolveFlowId(flowId, flowCode);
+        if (resolvedFlowId != null || StringUtils.hasText(moduleCode) || StringUtils.hasText(typeCode)) {
+            AssetType typeFilterAssetType = null;
+            if (StringUtils.hasText(typeCode)) {
+                typeFilterAssetType = assetTypeMapper.selectOne(
+                        new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
+            }
+            SysTenant tenantFilter = null;
+            if (StringUtils.hasText(tenantCode)) {
+                tenantFilter = sysTenantService.getByTenantCode(tenantCode);
+            }
+            List<FlowTask> filteredTasks = new ArrayList<>();
+            for (FlowTask t : taskList) {
+                FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
+                if (inst == null) continue;
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                if (flow == null) continue;
+                if (resolvedFlowId != null && !resolvedFlowId.equals(inst.getFlowId())) continue;
+                if (StringUtils.hasText(moduleCode) && !moduleCode.equals(flow.getModuleCode())) continue;
+                if (typeFilterAssetType != null && !typeFilterAssetType.getId().equals(flow.getAssetTypeId())) continue;
+                if (StringUtils.hasText(tenantCode) && tenantFilter != null) {
+                    Long effectiveTenantId = t.getTenantId() != null ? t.getTenantId() : inst.getTenantId();
+                    if (effectiveTenantId == null || !effectiveTenantId.equals(tenantFilter.getId())) continue;
+                }
+                filteredTasks.add(t);
+            }
+            taskList = filteredTasks;
+        }
+
+        List<FlowTaskVO> voList = new ArrayList<>();
+        for (FlowTask t : taskList) {
+            FlowTaskVO vo = new FlowTaskVO();
+            BeanUtils.copyProperties(t, vo);
+
+            FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
+            if (inst != null) {
+                vo.setFlowId(inst.getFlowId());
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                vo.setFlowName(flow != null ? flow.getFlowName() : "");
+                vo.setInstanceName(inst.getInstanceName());
+
+                SysUser applicant = sysUserService.getById(inst.getApplicantId());
+                vo.setApplicantName(applicant != null ? applicant.getUsername() : "");
+
+                Long effectiveTenantId = t.getTenantId();
+                if (effectiveTenantId == null || effectiveTenantId == 0) {
+                    effectiveTenantId = inst.getTenantId();
+                }
+                if (effectiveTenantId != null) {
+                    SysTenant tenant = sysTenantService.getById(effectiveTenantId);
+                    vo.setTenantName(tenant != null ? tenant.getTenantName() : "");
+                }
+                if (t.getSourceOrgId() != null) {
+                    BankOrg srcOrg = bankOrgMapper.selectById(t.getSourceOrgId());
+                    vo.setSourceOrgName(srcOrg != null ? srcOrg.getName() : "");
+                }
+                if (flow != null && flow.getAssetTypeId() != null) {
+                    AssetType assetType = assetTypeMapper.selectById(flow.getAssetTypeId());
+                    if (assetType != null) {
+                        vo.setTypeCode(assetType.getTypeCode());
+                        vo.setAssetTypeName(assetType.getTypeName());
+                    }
+                }
+            }
+            vo.setCurrentNodeName(t.getNodeName());
             voList.add(vo);
         }
 
@@ -2942,5 +3134,87 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             }
         }
         return result;
+    }
+
+    /**
+     * 统一查询接口
+     * 根据 queryType 分发到对应的查询方法
+     */
+    @Override
+    public FlowQueryResultVO<?> queryFlow(FlowQueryDTO dto) {
+        if (dto == null || dto.getUserId() == null) {
+            throw new RuntimeException("userId 不能为空");
+        }
+
+        // flowCode 优先，解析为 flowId 后再查询
+        Long resolvedFlowId = resolveFlowId(dto.getFlowId(), dto.getFlowCode());
+
+        String queryType = dto.getQueryType();
+        FlowQueryResultVO<Object> result = new FlowQueryResultVO<>();
+        result.setQueryType(queryType);
+
+        if ("pending".equals(queryType)) {
+            IPage<FlowTaskVO> page = myApproval(
+                    dto.getUserId(), 0,
+                    dto.getModuleCode(), dto.getTenantCode(),
+                    resolvedFlowId, dto.getTypeCode(),
+                    dto.getNodeKey(),
+                    dto.getPageNum(), dto.getPageSize());
+            buildResult(result, page);
+            return result;
+        } else if ("myApproval".equals(queryType)) {
+            IPage<FlowTaskVO> page = myApproval(
+                    dto.getUserId(),
+                    dto.getTaskStatus() != null ? dto.getTaskStatus() : 1,
+                    dto.getModuleCode(), dto.getTenantCode(),
+                    resolvedFlowId, dto.getTypeCode(),
+                    dto.getNodeKey(),
+                    dto.getPageNum(), dto.getPageSize());
+            buildResult(result, page);
+            return result;
+        } else if ("myInitiated".equals(queryType)) {
+            IPage<FlowInstanceVO> page = myInitiated(
+                    dto.getUserId(),
+                    dto.getModuleCode(), dto.getTenantCode(),
+                    resolvedFlowId, dto.getTypeCode(),
+                    dto.getNodeKey(),
+                    dto.getPageNum(), dto.getPageSize());
+            buildResult(result, page);
+            return result;
+        } else {
+            throw new RuntimeException("不支持的 queryType：" + queryType + "，可选值：pending、myApproval、myInitiated");
+        }
+    }
+
+    /**
+     * 根据 flowId 或 flowCode 解析出 flowId
+     * @param flowId 流程定义ID（优先使用）
+     * @param flowCode 流程定义编码（flowId 为空时使用）
+     * @return 流程定义ID，查不到返回 null
+     */
+    private Long resolveFlowId(Long flowId, String flowCode) {
+        if (flowId != null) {
+            return flowId;
+        }
+        if (flowCode != null && !flowCode.isEmpty()) {
+            FlowDefinition def = flowDefinitionMapper.selectOne(
+                    new LambdaQueryWrapper<FlowDefinition>()
+                            .eq(FlowDefinition::getFlowCode, flowCode)
+                            .eq(FlowDefinition::getStatus, 1)
+                            .last("LIMIT 1"));
+            return def != null ? def.getId() : null;
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void buildResult(FlowQueryResultVO<Object> result, IPage<?> page) {
+        result.setPage((com.baomidou.mybatisplus.core.metadata.IPage<Object>) page);
+        result.setTotal(page.getTotal());
+        result.setPageNum(page.getCurrent());
+        result.setPageSize(page.getSize());
+        long totalPages = page.getSize() > 0 ? (page.getTotal() + page.getSize() - 1) / page.getSize() : 0;
+        result.setTotalPages(totalPages);
+        result.setRecords((java.util.List<Object>) page.getRecords());
     }
 }

@@ -12,16 +12,28 @@ public class SysAsset implements Serializable {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
+    /** 所属模块编码 */
     private String moduleCode;
 
+    /** 关联资产类型ID（asset_type.id） */
+    private Long typeId;
+
+    /** 所属租户ID（多租户模块使用） */
+    private Long tenantId;
+
+    /** 资产名称 */
     private String assetName;
 
+    /** 资产编码 */
     private String assetCode;
 
-    private String assetType;
-
+    /** 资产描述 */
     private String assetDesc;
 
+    /** 自定义参数（JSON格式，如 {"cpu":"8核","mem":"16G"}） */
+    private String customParams;
+
+    /** 状态（1启用 0禁用） */
     private Integer status;
 
     @TableField(fill = FieldFill.INSERT)

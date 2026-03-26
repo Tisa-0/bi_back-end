@@ -5,6 +5,8 @@ import com.rightmanage.entity.flow.FlowInstance;
 import com.rightmanage.entity.flow.FlowStartDTO;
 import com.rightmanage.entity.flow.FlowDetailVO;
 import com.rightmanage.entity.flow.FlowInstanceVO;
+import com.rightmanage.entity.flow.FlowQueryDTO;
+import com.rightmanage.entity.flow.FlowQueryResultVO;
 import com.rightmanage.service.flow.FlowInstanceService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,11 +40,13 @@ public class FlowInstanceController {
     public Result<IPage<FlowInstanceVO>> getMyInstances(
             @RequestParam Long userId,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String tenantCode,
             @RequestParam(required = false) Long flowId,
+            @RequestParam(required = false) String typeCode,
+            @RequestParam(required = false) String currentNodeKey,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(flowInstanceService.myInitiated(userId, moduleCode, tenantId, flowId, pageNum, pageSize));
+        return Result.success(flowInstanceService.myInitiated(userId, moduleCode, tenantCode, flowId, typeCode, currentNodeKey, pageNum, pageSize));
     }
 
     /**
@@ -106,5 +110,19 @@ public class FlowInstanceController {
             @RequestParam(required = false) Long sourceOrgId) {
         return Result.success(
                 flowInstanceService.getRoleDynamicUsers(moduleCode, roleIds, tenantId, sourceOrgId));
+    }
+
+    /**
+     * 【新增】统一查询接口
+     * 根据 queryType 查询对应的数据：
+     * - pending: 待办任务（taskStatus=0 的我的审批）
+     * - myApproval: 我的审批（可指定 taskStatus）
+     * - myInitiated: 我的流转
+     *
+     * 支持筛选条件：moduleCode、tenantCode、flowId、typeCode、nodeKey
+     */
+    @PostMapping("/query")
+    public Result<FlowQueryResultVO<?>> queryFlow(@RequestBody FlowQueryDTO dto) {
+        return Result.success(flowInstanceService.queryFlow(dto));
     }
 }

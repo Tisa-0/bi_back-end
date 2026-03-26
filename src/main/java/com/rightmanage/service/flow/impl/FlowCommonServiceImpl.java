@@ -577,4 +577,9 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         logService.saveLog(instanceId, userId, sysUserService.getById(userId).getUsername(),
                 operationType, operationDesc);
     }
+
+    @Override
+    public FlowQueryResultVO<?> queryFlow(FlowQueryDTO dto) {
+        return flowInstanceService.queryFlow(dto);
+    }
 }
