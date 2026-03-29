@@ -4,6 +4,7 @@ import com.rightmanage.entity.flow.*;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import java.util.List;
 import java.util.Map;
+import com.rightmanage.entity.SysUser;
 
 public interface FlowInstanceService {
     /**
@@ -120,4 +121,26 @@ public interface FlowInstanceService {
     IPage<FlowTaskVO> adminAllTasks(Integer taskStatus, String moduleCode, String tenantCode,
                                      Long flowId, String flowCode, String typeCode, String nodeKey,
                                      Integer pageNum, Integer pageSize);
+
+    /**
+     * 【新增】回退流程到上一步（强制回退，支持多次回退）
+     * 无论当前流程处于什么状态，都强制将流程回退到前一步，且前一步为"待处理"状态
+     * 可多次回退，直到第一个审批节点为待处理状态
+     * @param instanceId 流程实例ID
+     * @param userId 操作人ID（管理员）
+     * @return 回退结果描述（成功或"已回退至流程初始状态"）
+     */
+    String rollbackFlow(Long instanceId, Long userId);
+
+    /**
+     * 【新增】驳回时通知业务执行模块
+     * 当流程被驳回时，通知当前审批节点配置的executeModules，告知流程已被驳回及被驳回的节点信息
+     * @param instanceId 流程实例ID
+     * @param flowId 流程定义ID
+     * @param nodeKey 被驳回的节点key
+     * @param nodeName 被驳回的节点名称
+     * @param operator 操作人信息
+     * @param comment 驳回意见
+     */
+    void notifyModulesOnReject(Long instanceId, Long flowId, String nodeKey, String nodeName, SysUser operator, String comment);
 }

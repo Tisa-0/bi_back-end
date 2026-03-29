@@ -1,6 +1,7 @@
 package com.rightmanage.service.flow.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -882,10 +883,31 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
     }
 
+    /**
+     * 判断用户在 bi_workstation 模块下是否拥有 SUPER_ADMIN 角色
+     */
+    private boolean isSuperAdminForBiWorkstation(Long userId) {
+        LambdaQueryWrapper<SysUserRole> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysUserRole::getUserId, userId);
+        List<SysUserRole> userRoles = sysUserRoleMapper.selectList(wrapper);
+        for (SysUserRole ur : userRoles) {
+            SysRole role = sysRoleService.getById(ur.getRoleId());
+            if (role != null && "SUPER_ADMIN".equals(role.getRoleCode()) && "bi_workstation".equals(role.getModuleCode())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public void approveFlow(Long taskId, String action, String comment, Long userId) {
         FlowTask task = flowTaskMapper.selectById(taskId);
-        if (task == null || !task.getHandlerId().equals(userId) || task.getStatus() != 0) {
+        if (task == null) {
+            throw new RuntimeException("任务不存在");
+        }
+        // bi_workstation 模块的 SUPER_ADMIN 用户拥有所有流程的审批权限，跳过 handlerId 检查
+        boolean isSuperAdmin = isSuperAdminForBiWorkstation(userId);
+        if (!isSuperAdmin && (!task.getHandlerId().equals(userId) || task.getStatus() != 0)) {
             throw new RuntimeException("无权限处理该任务或任务已处理");
         }
 
@@ -905,23 +927,31 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println(">>> approveFlow - 用户[" + operator.getUsername() + "]审批通过节点[" + task.getNodeName()
                 + "(key=" + task.getNodeKey() + ")]");
 
-        if ("reject".equals(action)) {
-            // 驳回：流程终止
-            task.setStatus(2); // 已驳回
-            flowTaskMapper.updateById(task);
-            instance.setStatus(FlowInstanceStatus.REJECTED.getCode());
-            flowInstanceMapper.updateById(instance);
-            dynamicHandlerThreadLocal.remove();
-            return;
-        }
-
-        // 【新增】检查该节点是否配置了业务执行模块
+        // 查询该节点的配置信息（审批通过和驳回都可能用到）
         FlowNodeConfig nodeConfig = flowNodeConfigMapper.selectOne(
                 new LambdaQueryWrapper<FlowNodeConfig>()
                         .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
                         .eq(FlowNodeConfig::getNodeKey, task.getNodeKey())
         );
 
+        if ("reject".equals(action)) {
+            // 驳回：流程终止
+            task.setStatus(2); // 已驳回
+            flowTaskMapper.updateById(task);
+            instance.setStatus(FlowInstanceStatus.REJECTED.getCode());
+            flowInstanceMapper.updateById(instance);
+
+            // 【新增】驳回时通知业务执行模块
+            if (nodeConfig != null && StringUtils.hasText(nodeConfig.getExecuteModules())) {
+                notifyModulesOnReject(instance.getId(), instance.getFlowId(),
+                        task.getNodeKey(), task.getNodeName(), operator, comment);
+            }
+
+            dynamicHandlerThreadLocal.remove();
+            return;
+        }
+
+        // 【新增】检查该节点是否配置了业务执行模块
         boolean hasExecuteModules = nodeConfig != null
                 && StringUtils.hasText(nodeConfig.getExecuteModules());
 
@@ -1354,11 +1384,15 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             );
             
             for (FlowTask task : tasksToSkip) {
-                task.setStatus(5); // 已跳过
-                task.setAction("skip");
-                task.setComment("因逻辑或节点其他分支已通过，该节点被自动跳过");
-                task.setExecuteTime(new Date());
-                flowTaskMapper.updateById(task);
+                // 【修复】必须用 LambdaUpdateWrapper，否则 handlerId=null 不会清空数据库字段
+                LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
+                        .eq(FlowTask::getId, task.getId())
+                        .eq(FlowTask::getDeleted, 0)
+                        .set(FlowTask::getStatus, 5) // 已跳过
+                        .set(FlowTask::getAction, "skip")
+                        .set(FlowTask::getComment, "因逻辑或节点其他分支已通过，该节点被自动跳过")
+                        .set(FlowTask::getExecuteTime, new Date());
+                flowTaskMapper.update(null, updateWrapper);
                 
                 // 记录操作日志
                 logService.saveLog(instance.getId(), null, null,
@@ -1375,65 +1409,49 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     /**
-     * 查找所有指向指定逻辑节点的审批节点
+     * 查找所有指向指定节点（包括逻辑节点）的审批节点
+     * 支持递归穿透 LOGIC_AND/LOGIC_OR 节点向上查找真正的审批前置节点
      */
-    private List<FlowNodeConfig> findPredecessorApprovalNodes(FlowNodeConfig logicNode,
+    private List<FlowNodeConfig> findPredecessorApprovalNodes(FlowNodeConfig targetNode,
             List<FlowNodeConfig> allNodes, List<FlowLine> flowLines,
             Map<String, FlowNodeConfig> nodeKeyMap, Map<String, FlowNodeConfig> nodeIdMap) {
-        
+
         List<FlowNodeConfig> predecessors = new ArrayList<>();
-        
-        if (flowLines == null || flowLines.isEmpty()) {
-            // 兼容模式：按 sort 顺序查找逻辑节点之前的所有审批节点
-            int logicIndex = -1;
-            for (int i = 0; i < allNodes.size(); i++) {
-                if (allNodes.get(i).getNodeKey().equals(logicNode.getNodeKey())) {
-                    logicIndex = i;
-                    break;
-                }
-            }
-            
-            if (logicIndex > 0) {
-                for (int i = logicIndex - 1; i >= 0; i--) {
-                    FlowNodeConfig node = allNodes.get(i);
-                    if (FlowNodeType.APPROVE.getCode().equals(node.getNodeType())) {
-                        predecessors.add(node);
-                    } else if (FlowNodeType.START.getCode().equals(node.getNodeType())) {
-                        // 开始节点不计入
-                    } else if (FlowNodeType.isLogicNode(node.getNodeType())) {
-                        // 遇到其他逻辑节点，停止查找
-                        break;
-                    } else {
-                        // 其他节点类型，停止查找
-                        break;
-                    }
-                }
-            }
-            return predecessors;
-        }
+        Set<String> visited = new HashSet<>();
+        Queue<String> queue = new LinkedList<>();
 
-        // 使用连线信息查找
-        String logicKey = logicNode.getNodeKey();
-        String logicUuid = logicNode.getUuid();
+        // 直接以 targetNode 作为起点（而不是找指向它的线）
+        queue.add(targetNode.getNodeKey());
+        visited.add(targetNode.getNodeKey());
 
-        for (FlowLine line : flowLines) {
-            // 检查连线是否指向该逻辑节点
-            boolean pointsToLogic = line.getToNode().equals(logicKey) 
-                    || (logicUuid != null && line.getToNode().equals(logicUuid));
-            
-            if (pointsToLogic) {
-                // 找到指向逻辑节点的连线，获取起始节点
+        while (!queue.isEmpty()) {
+            String currentKey = queue.poll();
+            FlowNodeConfig current = nodeKeyMap.get(currentKey);
+            if (current == null) current = nodeIdMap.get(currentKey);
+            if (current == null) continue;
+
+            // 查找所有指向 current 的前置节点（反向遍历连线）
+            for (FlowLine line : flowLines) {
+                if (!line.getToNode().equals(currentKey) && !line.getToNode().equals(current.getUuid())) {
+                    continue;
+                }
                 String fromKey = line.getFromNode();
                 FlowNodeConfig fromNode = nodeIdMap.get(fromKey);
-                if (fromNode == null) {
-                    fromNode = nodeKeyMap.get(fromKey);
-                }
-                
-                if (fromNode != null && FlowNodeType.APPROVE.getCode().equals(fromNode.getNodeType())) {
+                if (fromNode == null) fromNode = nodeKeyMap.get(fromKey);
+                if (fromNode == null) continue;
+
+                if (FlowNodeType.APPROVE.getCode().equals(fromNode.getNodeType())) {
                     if (!predecessors.contains(fromNode)) {
                         predecessors.add(fromNode);
                     }
+                } else if (FlowNodeType.isLogicNode(fromNode.getNodeType())) {
+                    // LOGIC_AND/LOGIC_OR 节点：递归穿透，继续向上找
+                    if (!visited.contains(fromNode.getNodeKey())) {
+                        visited.add(fromNode.getNodeKey());
+                        queue.add(fromNode.getNodeKey());
+                    }
                 }
+                // START 节点或其他类型节点：忽略
             }
         }
 
@@ -1536,6 +1554,108 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         //     // 调用失败，自动触发失败回调
         //     handleModuleCallback(callbackToken, false, "模块调用失败: " + e.getMessage(), null);
         // }
+    }
+
+    @Override
+    public void notifyModulesOnReject(Long instanceId, Long flowId, String rejectedNodeKey, String rejectedNodeName, SysUser operator, String comment) {
+        FlowDefinition flowDefinition = flowDefinitionMapper.selectById(flowId);
+        String flowCode = flowDefinition != null ? flowDefinition.getFlowCode() : "";
+
+        Map<String, Object> params = flowCommonService.getFlowParams(instanceId);
+
+        FlowInstance instance = flowInstanceMapper.selectById(instanceId);
+        String instanceName = instance != null ? instance.getInstanceName() : "";
+        Long applicantId = instance != null ? instance.getApplicantId() : null;
+        String applicantName = "";
+        if (applicantId != null) {
+            SysUser applicant = sysUserService.getById(applicantId);
+            applicantName = applicant != null ? applicant.getUsername() : "";
+        }
+
+        // 查询该流程实例下所有已处理（通过）的任务，找出发起该流程以来的所有已通过节点
+        List<FlowTask> allTasks = flowTaskMapper.selectList(
+                new LambdaQueryWrapper<FlowTask>()
+                        .eq(FlowTask::getInstanceId, instanceId)
+                        .eq(FlowTask::getDeleted, 0)
+                        .in(FlowTask::getStatus, Arrays.asList(1, 2, 5)) // 1=已通过 2=已驳回 5=已跳过
+                        .orderByAsc(FlowTask::getCreateTime)
+        );
+
+        // 找出所有配置了业务执行模块的节点（包括当前被驳回的节点）
+        Set<String> notifiedModules = new HashSet<>();
+
+        System.out.println("【驳回模块通知】========================================");
+        System.out.println("【驳回模块通知】通知类型: 流程驳回");
+        System.out.println("【驳回模块通知】流程编码(flow_code): " + flowCode);
+        System.out.println("【驳回模块通知】流程实例ID: " + instanceId);
+        System.out.println("【驳回模块通知】流程实例名称: " + instanceName);
+        System.out.println("【驳回模块通知】申请人: " + applicantName);
+        System.out.println("【驳回模块通知】被驳回节点(key): " + rejectedNodeKey);
+        System.out.println("【驳回模块通知】被驳回节点(名称): " + rejectedNodeName);
+        System.out.println("【驳回模块通知】驳回人: " + (operator != null ? operator.getUsername() : "系统"));
+        System.out.println("【驳回模块通知】驳回意见: " + (comment != null ? comment : "无"));
+        System.out.println("【驳回模块通知】驳回时间: " + new Date());
+        System.out.println("【驳回模块通知】自定义参数: " + params);
+
+        System.out.println("【驳回模块通知】--- 开始通知各个业务执行模块 ---");
+
+        // 1. 通知当前被驳回的节点
+        FlowNodeConfig rejectedConfig = flowNodeConfigMapper.selectOne(
+                new LambdaQueryWrapper<FlowNodeConfig>()
+                        .eq(FlowNodeConfig::getFlowId, flowId)
+                        .eq(FlowNodeConfig::getNodeKey, rejectedNodeKey)
+        );
+        if (rejectedConfig != null && StringUtils.hasText(rejectedConfig.getExecuteModules())) {
+            for (String module : rejectedConfig.getExecuteModules().split(",")) {
+                module = module.trim();
+                if (!notifiedModules.contains(module)) {
+                    notifiedModules.add(module);
+                    System.out.println("【驳回模块通知】[通知-当前驳回节点] 模块: " + module);
+                    System.out.println("  节点类型: 当前被驳回节点");
+                    System.out.println("  节点(key): " + rejectedNodeKey);
+                    System.out.println("  节点(名称): " + rejectedNodeName);
+                    logService.saveLog(instanceId, operator != null ? operator.getId() : null,
+                            operator != null ? operator.getUsername() : "系统",
+                            "reject_notify", "驳回通知：通知业务执行模块[" + module + "]，当前节点[" + rejectedNodeName + "]已被驳回");
+                }
+            }
+        }
+
+        // 2. 通知之前所有已通过的、且配置了业务执行模块的节点
+        for (FlowTask task : allTasks) {
+            // 跳过当前被驳回的节点（已在上方处理）
+            if (task.getNodeKey().equals(rejectedNodeKey)) {
+                continue;
+            }
+            // 只通知已通过的节点（status=1）
+            if (task.getStatus() != 1) {
+                continue;
+            }
+            FlowNodeConfig cfg = flowNodeConfigMapper.selectOne(
+                    new LambdaQueryWrapper<FlowNodeConfig>()
+                            .eq(FlowNodeConfig::getFlowId, flowId)
+                            .eq(FlowNodeConfig::getNodeKey, task.getNodeKey())
+            );
+            if (cfg != null && StringUtils.hasText(cfg.getExecuteModules())) {
+                for (String module : cfg.getExecuteModules().split(",")) {
+                    module = module.trim();
+                    if (!notifiedModules.contains(module)) {
+                        notifiedModules.add(module);
+                        System.out.println("【驳回模块通知】[通知-历史通过节点] 模块: " + module);
+                        System.out.println("  节点类型: 之前已审批通过的节点");
+                        System.out.println("  节点(key): " + task.getNodeKey());
+                        System.out.println("  节点(名称): " + task.getNodeName());
+                        System.out.println("  该节点通过时间: " + task.getExecuteTime());
+                        logService.saveLog(instanceId, operator != null ? operator.getId() : null,
+                                operator != null ? operator.getUsername() : "系统",
+                                "reject_notify", "驳回通知：通知业务执行模块[" + module + "]，因其下游节点[" + rejectedNodeName + "]被驳回，流程已终止");
+                    }
+                }
+            }
+        }
+
+        System.out.println("【驳回模块通知】共通知了 " + notifiedModules.size() + " 个业务模块: " + notifiedModules);
+        System.out.println("【驳回模块通知】========================================");
     }
 
     public Map<String, Object> handleModuleCallback(String callbackToken, boolean success, String message, String extraData) {
@@ -1919,6 +2039,294 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
+    public String rollbackFlow(Long instanceId, Long userId) {
+        FlowInstance instance = flowInstanceMapper.selectById(instanceId);
+        if (instance == null) {
+            throw new RuntimeException("流程实例不存在");
+        }
+
+        if (!FlowInstanceStatus.RUNNING.getCode().equals(instance.getStatus())) {
+            throw new RuntimeException("只有运行中的流程才能回退");
+        }
+
+        // 检查是否有节点处于"业务执行中"状态，不允许回退
+        List<FlowTask> executingTasks = flowTaskMapper.selectList(
+                new LambdaQueryWrapper<FlowTask>()
+                        .eq(FlowTask::getInstanceId, instanceId)
+                        .eq(FlowTask::getDeleted, 0)
+                        .eq(FlowTask::getStatus, 3)
+        );
+        if (!executingTasks.isEmpty()) {
+            String executingNodeNames = executingTasks.stream()
+                    .map(FlowTask::getNodeName)
+                    .collect(Collectors.joining("、"));
+            throw new RuntimeException("等待当前节点[" + executingNodeNames + "]逻辑执行完成后再回退");
+        }
+
+        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+        if (flow == null) {
+            throw new RuntimeException("流程定义不存在");
+        }
+
+        List<FlowLine> flowLines = new ArrayList<>();
+        Map<String, FlowNodeConfig> nodeKeyMap = new HashMap<>();
+        Map<String, FlowNodeConfig> nodeIdMap = new HashMap<>();
+        List<FlowNodeConfig> allNodes = flowNodeConfigMapper.selectList(
+                new LambdaQueryWrapper<FlowNodeConfig>()
+                        .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                        .orderByAsc(FlowNodeConfig::getSort)
+        );
+        for (FlowNodeConfig node : allNodes) {
+            nodeKeyMap.put(node.getNodeKey(), node);
+            if (StringUtils.hasText(node.getUuid())) {
+                nodeIdMap.put(node.getUuid(), node);
+            }
+        }
+        if (StringUtils.hasText(flow.getFlowJson())) {
+            try {
+                FlowJsonData flowJsonData = objectMapper.readValue(flow.getFlowJson(), FlowJsonData.class);
+                if (flowJsonData != null && flowJsonData.getLines() != null) {
+                    flowLines = flowJsonData.getLines();
+                }
+            } catch (Exception e) {
+                log.warn("解析 flowJson 失败", e);
+            }
+        }
+
+        List<FlowTask> allTasks = flowTaskMapper.selectList(
+                new LambdaQueryWrapper<FlowTask>()
+                        .eq(FlowTask::getInstanceId, instanceId)
+                        .eq(FlowTask::getDeleted, 0)
+                        .orderByAsc(FlowTask::getCreateTime)
+        );
+
+        // 找出当前"最靠后"（执行顺序最后）的 APPROVE 审批任务
+        // 【修复】按 createTime 倒序找最后一个 APPROVE 节点任务（而非按 status=0），
+        // 因为回退起点可能是 status=3(业务执行中)、status=1(已完成) 等任意状态
+        FlowTask currentPendingTask = null;
+        for (int i = allTasks.size() - 1; i >= 0; i--) {
+            FlowTask t = allTasks.get(i);
+            if (FlowNodeType.APPROVE.getCode().equals(t.getNodeType())) {
+                currentPendingTask = t;
+                break;
+            }
+        }
+
+        // 查找 currentPendingTask 所在节点的前置审批节点
+        FlowNodeConfig currentNode = nodeKeyMap.get(currentPendingTask.getNodeKey());
+        if (currentNode == null && StringUtils.hasText(currentPendingTask.getNodeKey())) {
+            currentNode = nodeIdMap.get(currentPendingTask.getNodeKey());
+        }
+
+        List<FlowNodeConfig> predecessorNodes = new ArrayList<>();
+        if (currentNode != null) {
+            predecessorNodes = findPredecessorApprovalNodes(currentNode, allNodes, flowLines, nodeKeyMap, nodeIdMap);
+        }
+
+        if (predecessorNodes.isEmpty()) {
+            // 没有前置审批节点，说明当前就是第一个审批节点，已是初始状态
+            return "已回退至流程初始状态";
+        }
+
+        SysUser operator = sysUserService.getById(userId);
+        String operatorName = operator != null ? operator.getUsername() : "管理员";
+
+        // 收集所有需要撤销的后续审批节点 nodeKey
+        // APPROVE 节点：由 Step 1 设置为 status=5
+        // NOTIFY/TEXT 节点：仅用于继续正向遍历（不加入 subsequentNodeKeys）
+        // 【重要】从 currentNode 开始正向遍历，而非从 predecessorNodes 开始
+        // 这样避免把 currentNode 本身错误地加入 subsequentNodeKeys
+        Set<String> subsequentNodeKeys = new HashSet<>();
+        Queue<String> queue = new LinkedList<>();
+        Set<String> visited = new HashSet<>();
+        // 从 currentNode 开始遍历，而不是从 predecessorNodes 开始
+        String startKey = currentNode != null ? currentNode.getNodeKey() : null;
+        if (startKey != null) {
+            queue.add(startKey);
+        }
+        while (!queue.isEmpty()) {
+            String nodeKey = queue.poll();
+            if (visited.contains(nodeKey)) continue;
+            visited.add(nodeKey);
+
+            FlowNodeConfig current = nodeKeyMap.get(nodeKey);
+            if (current == null) current = nodeIdMap.get(nodeKey);
+            if (current == null) continue;
+
+            List<FlowNodeConfig> nextNodes = findNextNodesByLines(current, allNodes, flowLines, nodeKeyMap, nodeIdMap);
+            for (FlowNodeConfig next : nextNodes) {
+                if (FlowNodeType.APPROVE.getCode().equals(next.getNodeType())) {
+                    // APPROVE 节点：加入待撤销列表，后续由 Step 1 设置为 status=5
+                    subsequentNodeKeys.add(next.getNodeKey());
+                }
+                // NOTIFY/TEXT 节点：仅用于继续正向遍历，不加入 subsequentNodeKeys
+                if (!visited.contains(next.getNodeKey())) {
+                    queue.add(next.getNodeKey());
+                }
+            }
+        }
+
+        // Step 1: 将所有后续节点的任务标记为"已跳过"（被回退撤销），清除所有字段
+        for (FlowTask task : allTasks) {
+            if (subsequentNodeKeys.contains(task.getNodeKey())) {
+                // 【修复】必须用 LambdaUpdateWrapper，否则 handlerId=null 不会清空数据库字段
+                LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
+                        .eq(FlowTask::getId, task.getId())
+                        .eq(FlowTask::getDeleted, 0)
+                        .set(FlowTask::getStatus, 5)
+                        .set(FlowTask::getHandlerId, null)
+                        .set(FlowTask::getHandlerName, null)
+                        .set(FlowTask::getAction, "rollback")
+                        .set(FlowTask::getComment, "因回退操作，该节点任务被撤销")
+                        .set(FlowTask::getExecuteTime, null);
+                flowTaskMapper.update(null, updateWrapper);
+                logService.saveLog(instanceId, task.getHandlerId(), task.getHandlerName(),
+                        FlowOperationType.ROLLBACK.getCode(),
+                        "审批节点[" + task.getNodeName() + "]因回退操作被撤销");
+                System.out.println("rollbackFlow - 撤销后续任务: taskId=" + task.getId() + ", node=" + task.getNodeName());
+            }
+        }
+
+        // Step 1b: 将当前审批节点本身也重置为"待处理"，清除处理人、操作、执行时间
+        if (currentPendingTask != null && FlowNodeType.APPROVE.getCode().equals(currentPendingTask.getNodeType())) {
+            LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
+                    .eq(FlowTask::getId, currentPendingTask.getId())
+                    .eq(FlowTask::getDeleted, 0)
+                    .set(FlowTask::getStatus, 0)
+                    .set(FlowTask::getHandlerId, null)
+                    .set(FlowTask::getHandlerName, null)
+                    .set(FlowTask::getAction, null)
+                    .set(FlowTask::getComment, null)
+                    .set(FlowTask::getExecuteTime, null);
+            flowTaskMapper.update(null, updateWrapper);
+            // 同步更新内存对象，确保后续 Step 2 中不会重复处理
+            currentPendingTask.setStatus(0);
+            currentPendingTask.setHandlerId(null);
+            currentPendingTask.setHandlerName(null);
+            currentPendingTask.setAction(null);
+            currentPendingTask.setComment(null);
+            currentPendingTask.setExecuteTime(null);
+            logService.saveLog(instanceId, userId, operatorName,
+                    FlowOperationType.ROLLBACK.getCode(),
+                    "审批节点[" + currentPendingTask.getNodeName() + "]被回退至待处理状态（由" + operatorName + "操作）");
+            System.out.println("rollbackFlow - 重置当前节点为待处理: taskId=" + currentPendingTask.getId() + ", node=" + currentPendingTask.getNodeName());
+        }
+
+        // Step 2: 将所有前置节点的任务重置为"待处理"
+        for (FlowNodeConfig predNode : predecessorNodes) {
+            List<FlowTask> predTasks = flowTaskMapper.selectList(
+                    new LambdaQueryWrapper<FlowTask>()
+                            .eq(FlowTask::getInstanceId, instanceId)
+                            .eq(FlowTask::getNodeKey, predNode.getNodeKey())
+                            .eq(FlowTask::getDeleted, 0)
+            );
+            if (!predTasks.isEmpty()) {
+                for (FlowTask task : predTasks) {
+                    LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
+                            .eq(FlowTask::getId, task.getId())
+                            .eq(FlowTask::getDeleted, 0)
+                            .set(FlowTask::getStatus, 0)
+                            .set(FlowTask::getAction, null)
+                            .set(FlowTask::getComment, null)
+                            .set(FlowTask::getExecuteTime, null);
+                    flowTaskMapper.update(null, updateWrapper);
+                    logService.saveLog(instanceId, task.getHandlerId(), task.getHandlerName(),
+                            FlowOperationType.ROLLBACK.getCode(),
+                            "审批节点[" + task.getNodeName() + "]被回退至待处理状态（由" + operatorName + "操作）");
+                    System.out.println("rollbackFlow - 重置任务为待处理: taskId=" + task.getId() + ", node=" + task.getNodeName());
+                }
+            } else {
+                // 无任务记录时创建新的待处理任务
+                createRollbackTask(instance, predNode, operator);
+            }
+        }
+
+        // 更新实例当前节点
+        FlowNodeConfig firstPredecessor = predecessorNodes.get(0);
+        instance.setCurrentNodeKey(firstPredecessor.getNodeKey());
+        instance.setCurrentNodeName(firstPredecessor.getNodeName());
+        flowInstanceMapper.updateById(instance);
+
+        logService.saveLog(instanceId, userId, operatorName,
+                FlowOperationType.ROLLBACK.getCode(),
+                "流程从节点[" + currentPendingTask.getNodeName() + "]回退到[" + firstPredecessor.getNodeName() + "]");
+
+        return "回退成功，当前节点已回退到[" + firstPredecessor.getNodeName() + "]";
+    }
+
+    /**
+     * 根据角色ID获取第一个成员用户
+     */
+    private SysUser getFirstUserByRoleId(Long roleId, Long tenantId) {
+        LambdaQueryWrapper<SysUserRole> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(SysUserRole::getRoleId, roleId);
+        if (tenantId != null) {
+            queryWrapper.eq(SysUserRole::getTenantId, tenantId);
+        }
+        List<SysUserRole> userRoles = sysUserRoleMapper.selectList(queryWrapper);
+        if (userRoles == null || userRoles.isEmpty()) {
+            return null;
+        }
+        return sysUserService.getById(userRoles.get(0).getUserId());
+    }
+
+    /**
+     * 回退时为没有任务记录的前置节点创建新任务
+     */
+    private void createRollbackTask(FlowInstance instance, FlowNodeConfig node, SysUser operator) {
+        FlowTask task = new FlowTask();
+        task.setInstanceId(instance.getId());
+        task.setNodeKey(node.getNodeKey());
+        task.setNodeName(node.getNodeName());
+        task.setNodeType(node.getNodeType());
+        task.setStatus(0); // 待处理
+        task.setTenantId(instance.getTenantId());
+
+        // 设置处理人
+        if (StringUtils.hasText(node.getHandlerType()) && StringUtils.hasText(node.getHandlerIds())) {
+            if ("user".equals(node.getHandlerType())) {
+                // handlerIds 格式为逗号分隔的用户ID，取第一个
+                String firstId = node.getHandlerIds().split(",")[0].trim();
+                try {
+                    Long handlerId = Long.parseLong(firstId);
+                    task.setHandlerId(handlerId);
+                    SysUser handler = sysUserService.getById(handlerId);
+                    if (handler != null) task.setHandlerName(handler.getUsername());
+                } catch (NumberFormatException ignored) {}
+            } else if ("role".equals(node.getHandlerType())) {
+                // handlerIds 为逗号分隔的角色ID，取第一个
+                String firstRoleId = node.getHandlerIds().split(",")[0].trim();
+                try {
+                    Long roleId = Long.parseLong(firstRoleId);
+                    SysUser roleUser = getFirstUserByRoleId(roleId, instance.getTenantId());
+                    if (roleUser != null) {
+                        task.setHandlerId(roleUser.getId());
+                        task.setHandlerName(roleUser.getUsername());
+                    }
+                } catch (NumberFormatException ignored) {}
+            } else if ("dynamic".equals(node.getHandlerType()) || "role_dynamic_user".equals(node.getHandlerType())) {
+                // 动态处理人：从 ThreadLocal 中获取（发起时已存过）
+                Map<String, DynamicHandlerDTO> dynamicMap = dynamicHandlerThreadLocal.get();
+                if (dynamicMap != null && dynamicMap.containsKey(node.getNodeKey())) {
+                    DynamicHandlerDTO dto = dynamicMap.get(node.getNodeKey());
+                    if (dto != null) {
+                        task.setHandlerId(dto.getHandlerId());
+                        task.setHandlerName(dto.getHandlerName());
+                        task.setTenantId(dto.getTenantId());
+                        task.setSourceOrgId(dto.getSourceOrgId());
+                    }
+                }
+            }
+        }
+
+        flowTaskMapper.insert(task);
+        Long opId = operator != null ? operator.getId() : null;
+        String opName = operator != null ? operator.getUsername() : "管理员";
+        logService.saveLog(instance.getId(), opId, opName,
+                FlowOperationType.ROLLBACK.getCode(), "回退后为节点[" + node.getNodeName() + "]创建待处理任务");
+    }
+
+    @Override
     public IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, String tenantCode, Long flowId, String typeCode, String currentNodeKey, Integer pageNum, Integer pageSize) {
         Page<FlowInstance> page = new Page<>(pageNum, pageSize);
 
@@ -2202,9 +2610,16 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         Page<FlowTask> page = new Page<>(pageNum, pageSize);
 
         // 不限制 handlerId，获取所有任务
-        LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
-                .eq(taskStatus != null, FlowTask::getStatus, taskStatus)
-                .eq(FlowTask::getDeleted, 0);
+        // 【修复】taskStatus=0 时排除 handlerId=null 的任务（回退后被撤销的节点，无处理人）
+        LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>();
+        if (taskStatus != null) {
+            if (taskStatus == 0) {
+                wrapper.eq(FlowTask::getStatus, 0).isNotNull(FlowTask::getHandlerId);
+            } else {
+                wrapper.eq(FlowTask::getStatus, taskStatus);
+            }
+        }
+        wrapper.eq(FlowTask::getDeleted, 0);
 
         if (StringUtils.hasText(tenantCode)) {
             SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
@@ -2639,15 +3054,21 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         nodeVO.setStatus(instanceCompleted ? "已完成" : "待触发");
                     } else {
                         // 其他节点：取第一个任务的 status
+                        // 【修复】status=0 时：如果没有 handlerId，说明是回退后被撤销的任务，显示"待触发"
+                        // 只有 status=0 且有 handlerId 的才是正常待处理的审批任务
                         String statusText;
-                        switch (firstTask.getStatus()) {
-                            case 0: statusText = "待处理"; break;
-                            case 1: statusText = "已完成"; break;
-                            case 2: statusText = "已驳回"; break;
-                            case 3: statusText = "业务执行中"; break;
-                            case 4: statusText = "逻辑处理失败"; break;
-                            case 5: statusText = "已跳过"; break;
-                            default: statusText = "未知"; break;
+                        if (firstTask.getStatus() == 0 && firstTask.getHandlerId() == null) {
+                            statusText = "待触发";
+                        } else {
+                            switch (firstTask.getStatus()) {
+                                case 0: statusText = "待处理"; break;
+                                case 1: statusText = "已完成"; break;
+                                case 2: statusText = "已驳回"; break;
+                                case 3: statusText = "业务执行中"; break;
+                                case 4: statusText = "逻辑处理失败"; break;
+                                case 5: statusText = "已跳过"; break;
+                                default: statusText = "未知"; break;
+                            }
                         }
                         nodeVO.setStatus(statusText);
                     }

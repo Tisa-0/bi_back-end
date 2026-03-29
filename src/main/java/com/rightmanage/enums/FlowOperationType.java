@@ -11,7 +11,8 @@ public enum FlowOperationType {
     PASS("pass", "自动通过"),
     CANCEL("cancel", "流程撤销"),
     TERMINATE("terminate", "流程终止"),
-    COMPLETE("complete", "流程完成");
+    COMPLETE("complete", "流程完成"),
+    ROLLBACK("rollback", "回退上一步");
 
     private final String code;
     private final String name;

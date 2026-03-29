@@ -125,4 +125,20 @@ public class FlowInstanceController {
     public Result<FlowQueryResultVO<?>> queryFlow(@RequestBody FlowQueryDTO dto) {
         return Result.success(flowInstanceService.queryFlow(dto));
     }
+
+    /**
+     * 【新增】回退流程到上一步
+     * 无论当前流程处于什么状态，都强制将流程回退到前一步，且前一步为"待处理"状态
+     * 可多次回退，直到第一个审批节点为待处理状态，再次点击提示"已回退至流程初始状态"
+     * 回退时注意通过"逻辑或"、"逻辑与"这类并行节点的回退
+     *
+     * @param instanceId 流程实例ID
+     * @param userId 操作人ID（管理员）
+     * @return 回退结果描述
+     */
+    @PostMapping("/rollback")
+    public Result<String> rollbackFlow(@RequestParam Long instanceId, @RequestParam Long userId) {
+        String result = flowInstanceService.rollbackFlow(instanceId, userId);
+        return Result.success(result);
+    }
 }
