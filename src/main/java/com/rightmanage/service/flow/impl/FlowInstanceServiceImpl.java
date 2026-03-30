@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.rightmanage.entity.BankOrg;
 import com.rightmanage.entity.SysUser;
+import com.rightmanage.entity.SysModule;
 import com.rightmanage.entity.SysRole;
 import com.rightmanage.entity.SysUserRole;
 import com.rightmanage.entity.SysTenant;
@@ -33,6 +34,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -143,6 +145,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private SysTenantService sysTenantService;
     @Autowired
     private SysModuleService sysModuleService;
+    @Autowired
+    private RestTemplate restTemplate;
     @Autowired
     private BankOrgMapper bankOrgMapper;
     @Autowired
@@ -1557,12 +1561,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
+    /**
+     * 驳回时通知所有涉及的业务执行模块
+     */
     public void notifyModulesOnReject(Long instanceId, Long flowId, String rejectedNodeKey, String rejectedNodeName, SysUser operator, String comment) {
         FlowDefinition flowDefinition = flowDefinitionMapper.selectById(flowId);
         String flowCode = flowDefinition != null ? flowDefinition.getFlowCode() : "";
-
         Map<String, Object> params = flowCommonService.getFlowParams(instanceId);
-
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         String instanceName = instance != null ? instance.getInstanceName() : "";
         Long applicantId = instance != null ? instance.getApplicantId() : null;
@@ -1571,18 +1576,18 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             SysUser applicant = sysUserService.getById(applicantId);
             applicantName = applicant != null ? applicant.getUsername() : "";
         }
+        Long tenantId = instance != null ? instance.getTenantId() : null;
 
-        // 查询该流程实例下所有已处理（通过）的任务，找出发起该流程以来的所有已通过节点
         List<FlowTask> allTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
                         .eq(FlowTask::getInstanceId, instanceId)
                         .eq(FlowTask::getDeleted, 0)
-                        .in(FlowTask::getStatus, Arrays.asList(1, 2, 5)) // 1=已通过 2=已驳回 5=已跳过
+                        .in(FlowTask::getStatus, Arrays.asList(1, 2, 5))
                         .orderByAsc(FlowTask::getCreateTime)
         );
 
-        // 找出所有配置了业务执行模块的节点（包括当前被驳回的节点）
-        Set<String> notifiedModules = new HashSet<>();
+        Set<String> notifiedModules = new LinkedHashSet<>();
+        Set<String> failedModules = new LinkedHashSet<>();
 
         System.out.println("【驳回模块通知】========================================");
         System.out.println("【驳回模块通知】通知类型: 流程驳回");
@@ -1596,7 +1601,6 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println("【驳回模块通知】驳回意见: " + (comment != null ? comment : "无"));
         System.out.println("【驳回模块通知】驳回时间: " + new Date());
         System.out.println("【驳回模块通知】自定义参数: " + params);
-
         System.out.println("【驳回模块通知】--- 开始通知各个业务执行模块 ---");
 
         // 1. 通知当前被驳回的节点
@@ -1608,26 +1612,26 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         if (rejectedConfig != null && StringUtils.hasText(rejectedConfig.getExecuteModules())) {
             for (String module : rejectedConfig.getExecuteModules().split(",")) {
                 module = module.trim();
-                if (!notifiedModules.contains(module)) {
-                    notifiedModules.add(module);
-                    System.out.println("【驳回模块通知】[通知-当前驳回节点] 模块: " + module);
-                    System.out.println("  节点类型: 当前被驳回节点");
-                    System.out.println("  节点(key): " + rejectedNodeKey);
-                    System.out.println("  节点(名称): " + rejectedNodeName);
-                    logService.saveLog(instanceId, operator != null ? operator.getId() : null,
-                            operator != null ? operator.getUsername() : "系统",
-                            "reject_notify", "驳回通知：通知业务执行模块[" + module + "]，当前节点[" + rejectedNodeName + "]已被驳回");
+                if (!StringUtils.hasText(module) || notifiedModules.contains(module)) {
+                    continue;
                 }
+                notifiedModules.add(module);
+                System.out.println("【驳回模块通知】[通知-当前驳回节点] 模块: " + module);
+
+                String logMsg = notifySingleModuleReject(module, flowCode, instanceId, instanceName,
+                        applicantName, rejectedNodeKey, rejectedNodeName, tenantId,
+                        operator, comment, params, "当前驳回节点", rejectedNodeKey, rejectedNodeName);
+                logService.saveLog(instanceId, operator != null ? operator.getId() : null,
+                        operator != null ? operator.getUsername() : "系统",
+                        "reject_notify", logMsg);
             }
         }
 
         // 2. 通知之前所有已通过的、且配置了业务执行模块的节点
         for (FlowTask task : allTasks) {
-            // 跳过当前被驳回的节点（已在上方处理）
             if (task.getNodeKey().equals(rejectedNodeKey)) {
                 continue;
             }
-            // 只通知已通过的节点（status=1）
             if (task.getStatus() != 1) {
                 continue;
             }
@@ -1639,23 +1643,115 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             if (cfg != null && StringUtils.hasText(cfg.getExecuteModules())) {
                 for (String module : cfg.getExecuteModules().split(",")) {
                     module = module.trim();
-                    if (!notifiedModules.contains(module)) {
-                        notifiedModules.add(module);
-                        System.out.println("【驳回模块通知】[通知-历史通过节点] 模块: " + module);
-                        System.out.println("  节点类型: 之前已审批通过的节点");
-                        System.out.println("  节点(key): " + task.getNodeKey());
-                        System.out.println("  节点(名称): " + task.getNodeName());
-                        System.out.println("  该节点通过时间: " + task.getExecuteTime());
-                        logService.saveLog(instanceId, operator != null ? operator.getId() : null,
-                                operator != null ? operator.getUsername() : "系统",
-                                "reject_notify", "驳回通知：通知业务执行模块[" + module + "]，因其下游节点[" + rejectedNodeName + "]被驳回，流程已终止");
+                    if (!StringUtils.hasText(module) || notifiedModules.contains(module)) {
+                        continue;
                     }
+                    notifiedModules.add(module);
+                    System.out.println("【驳回模块通知】[通知-历史通过节点] 模块: " + module);
+                    System.out.println("  节点类型: 之前已审批通过的节点");
+                    System.out.println("  节点(key): " + task.getNodeKey());
+                    System.out.println("  节点(名称): " + task.getNodeName());
+                    System.out.println("  该节点通过时间: " + task.getExecuteTime());
+
+                    String logMsg = notifySingleModuleReject(module, flowCode, instanceId, instanceName,
+                            applicantName, rejectedNodeKey, rejectedNodeName, tenantId,
+                            operator, comment, params, "历史通过节点[" + task.getNodeName() + "]",
+                            task.getNodeKey(), task.getNodeName());
+                    logService.saveLog(instanceId, operator != null ? operator.getId() : null,
+                            operator != null ? operator.getUsername() : "系统",
+                            "reject_notify", logMsg);
                 }
             }
         }
 
         System.out.println("【驳回模块通知】共通知了 " + notifiedModules.size() + " 个业务模块: " + notifiedModules);
+        if (!failedModules.isEmpty()) {
+            System.out.println("【驳回模块通知】通知失败模块: " + failedModules);
+        }
         System.out.println("【驳回模块通知】========================================");
+    }
+
+    /**
+     * 向单个业务模块发送驳回通知
+     * @param moduleCode        模块编码
+     * @param flowCode          流程编码
+     * @param instanceId         流程实例ID
+     * @param instanceName       实例名称
+     * @param applicantName      申请人
+     * @param rejectedNodeKey    被驳回节点编码
+     * @param rejectedNodeName   被驳回节点名称
+     * @param tenantId          租户ID
+     * @param operator          驳回操作人
+     * @param comment           驳回意见
+     * @param params            流程参数
+     * @param sourceDesc        来源描述（当前驳回节点 / 历史通过节点）
+     * @param notifyNodeKey     本次通知对应的节点key（HTTP请求体中使用该值）
+     * @param notifyNodeName    本次通知对应的节点名称（HTTP请求体中使用该值）
+     */
+    private String notifySingleModuleReject(String moduleCode, String flowCode, Long instanceId,
+            String instanceName, String applicantName, String rejectedNodeKey, String rejectedNodeName,
+            Long tenantId, SysUser operator, String comment, Map<String, Object> params,
+            String sourceDesc, String notifyNodeKey, String notifyNodeName) {
+        String moduleEndpoint = getModuleCallbackBaseUrl(moduleCode);
+        if (moduleEndpoint == null) {
+            System.out.println("【驳回模块通知】[通知失败] 模块[" + moduleCode + "]：未配置回调地址，跳过 HTTP 通知（仅记录日志）");
+            return "驳回通知：通知业务执行模块[" + moduleCode + "]，" + sourceDesc + "已被驳回，模块回调地址未配置";
+        }
+
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        requestBody.put("flow_code", flowCode);
+        requestBody.put("action", "reject");
+        requestBody.put("instance_id", instanceId);
+        requestBody.put("instance_name", instanceName);
+        requestBody.put("applicant_name", applicantName);
+        requestBody.put("tenant_id", tenantId);
+        requestBody.put("reject_node_key", notifyNodeKey);
+        requestBody.put("reject_node_name", notifyNodeName);
+        requestBody.put("reject_operator", operator != null ? operator.getUsername() : "系统");
+        requestBody.put("reject_time", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
+        requestBody.put("reject_comment", comment != null ? comment : "");
+        requestBody.put("params", params);
+
+        String callbackToken = UUID.randomUUID().toString();
+        requestBody.put("callback_token", callbackToken);
+        requestBody.put("callback_url", "/flow/callback/reject/complete");
+
+        try {
+            System.out.println("【驳回模块通知】[HTTP通知] 开始通知模块[" + moduleCode + "]: " + moduleEndpoint);
+            System.out.println("【驳回模块通知】[HTTP通知] 请求体: " + requestBody);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> httpResp = restTemplate.postForObject(
+                    moduleEndpoint, requestBody, Map.class);
+
+            System.out.println("【驳回模块通知】[HTTP通知] 模块[" + moduleCode + "] 响应: " + httpResp);
+
+            if (httpResp != null && Boolean.TRUE.equals(httpResp.get("success"))) {
+                return "驳回通知：通知业务执行模块[" + moduleCode + "]，" + sourceDesc + "已被驳回[" + rejectedNodeName + "]，模块已处理";
+            } else {
+                String msg = httpResp != null ? String.valueOf(httpResp.get("message")) : "未知原因";
+                return "驳回通知：通知业务执行模块[" + moduleCode + "]，" + sourceDesc + "已被驳回[" + rejectedNodeName + "]，模块处理失败：" + msg;
+            }
+        } catch (Exception e) {
+            System.out.println("【驳回模块通知】[HTTP通知] 模块[" + moduleCode + "] 调用异常: " + e.getMessage());
+            return "驳回通知：通知业务执行模块[" + moduleCode + "]，" + sourceDesc + "已被驳回[" + rejectedNodeName + "]，HTTP通知失败：" + e.getMessage();
+        }
+    }
+
+    /**
+     * 根据模块编码查询回调基础地址
+     * 通过查询 sys_module 或模块内注册的回调配置获取
+     * 目前从 sys_module 表的 module_url 字段读取，未配置时返回 null（仅记录日志）
+     */
+    private String getModuleCallbackBaseUrl(String moduleCode) {
+        SysModule module = sysModuleService.getByCode(moduleCode);
+        if (module != null) {
+            String url = module.getModuleUrl();
+            if (StringUtils.hasText(url)) {
+                return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+            }
+        }
+        return null;
     }
 
     public Map<String, Object> handleModuleCallback(String callbackToken, boolean success, String message, String extraData) {

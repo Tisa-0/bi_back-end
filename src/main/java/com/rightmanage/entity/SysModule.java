@@ -37,4 +37,10 @@ public class SysModule implements Serializable {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
+
+    /**
+     * 模块回调地址（用于流程驳回通知等跨模块 HTTP 调用）
+     * 例如：http://192.168.1.100:8080/api/flow
+     */
+    private String moduleUrl;
 }

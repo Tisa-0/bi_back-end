@@ -380,6 +380,7 @@ CREATE TABLE `sys_module`  (
   `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '模块描述',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `module_url` varchar(255) NULL COMMENT '模块回调地址（流程驳回等跨模块HTTP调用）',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_module_code`(`module_code`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '模块表' ROW_FORMAT = Compact;
@@ -387,9 +388,9 @@ CREATE TABLE `sys_module`  (
 -- ----------------------------
 -- Records of sys_module
 -- ----------------------------
-INSERT INTO `sys_module` VALUES (1, 'A', 'BI工作台', 0, 1, 'BI数据分析工作台模块', '2026-02-24 19:01:07', '2026-02-24 21:43:16');
-INSERT INTO `sys_module` VALUES (2, 'B', '灵活查询中心', 0, 1, '灵活查询中心模块', '2026-02-24 19:01:07', '2026-02-24 21:43:24');
-INSERT INTO `sys_module` VALUES (3, 'C', '产品智能定制', 1, 1, '产品智能定制模块（多租户）', '2026-02-24 19:01:07', '2026-02-24 21:43:38');
+INSERT INTO `sys_module` VALUES (1, 'A', 'BI工作台', 0, 1, 'BI数据分析工作台模块', '2026-02-24 19:01:07', '2026-02-24 21:43:16', NULL);
+INSERT INTO `sys_module` VALUES (2, 'B', '灵活查询中心', 0, 1, '灵活查询中心模块', '2026-02-24 19:01:07', '2026-02-24 21:43:24', NULL);
+INSERT INTO `sys_module` VALUES (3, 'C', '产品智能定制', 1, 1, '产品智能定制模块（多租户）', '2026-02-24 19:01:07', '2026-02-24 21:43:38', NULL);
 
 
 -- ----------------------------
