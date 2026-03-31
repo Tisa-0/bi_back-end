@@ -25,6 +25,8 @@ public class SysMenuVO implements Serializable {
 
     private Integer status;
 
+    private Integer horizontalMenu;
+
     private Date createTime;
 
     private Date updateTime;

@@ -394,6 +394,7 @@ public class SysMenuServiceImpl implements SysMenuService {
         vo.setModuleCode(menu.getModuleCode());
         vo.setSort(menu.getSort());
         vo.setStatus(menu.getStatus());
+        vo.setHorizontalMenu(menu.getHorizontalMenu());
         vo.setCreateTime(menu.getCreateTime());
         vo.setUpdateTime(menu.getUpdateTime());
         return vo;

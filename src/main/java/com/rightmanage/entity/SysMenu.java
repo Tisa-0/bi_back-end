@@ -26,6 +26,8 @@ public class SysMenu implements Serializable {
 
     private Integer status;
 
+    private Integer horizontalMenu;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 

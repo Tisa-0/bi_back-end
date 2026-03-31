@@ -249,6 +249,7 @@ CREATE TABLE `sys_menu`  (
   `module_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '所属模块(ABC)',
   `sort` int(11) NULL DEFAULT 0 COMMENT '排序',
   `status` int(11) NULL DEFAULT 1 COMMENT '状态(1启用0禁用)',
+  `horizontal_menu` int(11) NULL DEFAULT 0 COMMENT '横向菜单(1是0否)',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` int(11) NULL DEFAULT 0 COMMENT '逻辑删除(0未删除1已删除)',
