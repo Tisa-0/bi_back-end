@@ -144,8 +144,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         FlowInstance instance = flowInstanceMapper.selectById(task.getInstanceId());
         if (instance != null) {
-            FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
-            ctx.setModuleCode(flow != null ? flow.getModuleCode() : null);
+            ctx.setModuleCode(instance.getModuleCode());
         }
 
         if (task.getHandlerId() != null) {
@@ -206,6 +205,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         return sysModuleService.isMultiTenant(moduleCode);
     }
 
+    private AssetType getAssetTypeByCode(String typeCode) {
+        if (!StringUtils.hasText(typeCode)) {
+            return null;
+        }
+        return assetTypeMapper.selectOne(
+                new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode).last("LIMIT 1"));
+    }
+
     @Override
     public List<FlowInstance> list() {
         return baseMapper.selectList(new LambdaQueryWrapper<FlowInstance>()
@@ -235,6 +242,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         FlowDefinition flow = flowDefinitionMapper.selectById(dto.getFlowCode());
         if (flow == null || flow.getStatus() != 1) {
             throw new RuntimeException("流程不存在或未启用");
+        }
+        if (!StringUtils.hasText(dto.getModuleCode())) {
+            throw new RuntimeException("发起流程时必须选择模块");
+        }
+        if (!StringUtils.hasText(dto.getAssetTypeId())) {
+            throw new RuntimeException("发起流程时必须选择资产类型");
         }
 
         // 从 nodeConfigs 构建运行时配置 map（nodeKey -> DTO），同时汇总 nodeTenants
@@ -309,6 +322,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         instance.setFlowCode(dto.getFlowCode());
         instance.setInstanceName(dto.getInstanceName());
         instance.setApplicantId(userId);
+        instance.setModuleCode(dto.getModuleCode());
+        instance.setAssetTypeId(dto.getAssetTypeId());
         instance.setTenantCode(dto.getTenantCode());
         instance.setCurrentNodeName("开始节点");
         instance.setStatus(FlowInstanceStatus.RUNNING.getCode());
@@ -2515,6 +2530,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         if (tenantCode != null && !tenantCode.isEmpty()) {
             wrapper.eq(FlowInstance::getTenantCode, tenantCode);
         }
+        if (moduleCode != null && !moduleCode.isEmpty()) {
+            wrapper.eq(FlowInstance::getModuleCode, moduleCode);
+        }
+        if (typeCode != null && !typeCode.isEmpty()) {
+            wrapper.eq(FlowInstance::getAssetTypeId, typeCode);
+        }
 
         // 按当前审批节点过滤
         if (StringUtils.hasText(currentNodeKey)) {
@@ -2524,29 +2545,6 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         IPage<FlowInstance> instancePage = flowInstanceMapper.selectPage(page, wrapper);
         List<FlowInstance> instanceList = instancePage.getRecords();
 
-        if (moduleCode != null && !moduleCode.isEmpty()) {
-            List<FlowInstance> filteredList = new ArrayList<>();
-            for (FlowInstance inst : instanceList) {
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
-                if (flow != null && moduleCode.equals(flow.getModuleCode())) {
-                    filteredList.add(inst);
-                }
-            }
-            instanceList = filteredList;
-        }
-
-        // 按资产类型编码过滤
-        if (typeCode != null && !typeCode.isEmpty()) {
-            List<FlowInstance> filteredList = new ArrayList<>();
-            for (FlowInstance inst : instanceList) {
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
-                if (flow != null && typeCode.equals(flow.getAssetTypeId())) {
-                    filteredList.add(inst);
-                }
-            }
-            instanceList = filteredList;
-        }
-
         List<FlowInstanceVO> voList = new ArrayList<>();
         for (FlowInstance inst : instanceList) {
             FlowInstanceVO vo = new FlowInstanceVO();
@@ -2555,16 +2553,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
             if (flow != null) {
                 vo.setFlowName(flow.getFlowName());
-                if (moduleCode != null && !moduleCode.isEmpty() && !moduleCode.equals(flow.getModuleCode())) {
-                    continue;
-                }
-                // 填充资产类型信息
-                if (flow.getAssetTypeId() != null) {
-                    AssetType assetType = assetTypeMapper.selectById(flow.getAssetTypeId());
-                    if (assetType != null) {
-                        vo.setTypeCode(assetType.getTypeCode());
-                        vo.setAssetTypeName(assetType.getTypeName());
-                    }
+            }
+            if (inst.getAssetTypeId() != null) {
+                AssetType assetType = getAssetTypeByCode(inst.getAssetTypeId());
+                if (assetType != null) {
+                    vo.setTypeCode(assetType.getTypeCode());
+                    vo.setAssetTypeName(assetType.getTypeName());
                 }
             }
 
@@ -2643,10 +2637,6 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         // 按模块/流程/资产类型过滤（用于前端筛选展示）
         if ((moduleCode != null && !moduleCode.isEmpty()) || (tenantCode != null && !tenantCode.isEmpty()) || flowCode != null || (typeCode != null && !typeCode.isEmpty())) {
-            AssetType typeFilterAssetType = null;
-            if (typeCode != null && !typeCode.isEmpty()) {
-                typeFilterAssetType = assetTypeMapper.selectOne(new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
-            }
             List<FlowTask> filteredTasks = new ArrayList<>();
             for (FlowTask t : taskList) {
                 FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
@@ -2661,19 +2651,16 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 if (tenantCode != null && !tenantCode.isEmpty() && (effectiveTenantCode == null || !tenantCode.equals(effectiveTenantCode))) {
                     continue;
                 }
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
-                if (flow != null) {
-                    if (moduleCode != null && !moduleCode.isEmpty() && !moduleCode.equals(flow.getModuleCode())) {
-                        continue;
-                    }
-                    if (flowCode != null && !flowCode.equals(flow.getFlowCode())) {
-                        continue;
-                    }
-                    if (typeFilterAssetType != null && !typeFilterAssetType.getTypeCode().equals(flow.getAssetTypeId())) {
-                        continue;
-                    }
-                    filteredTasks.add(t);
+                if (moduleCode != null && !moduleCode.isEmpty() && !moduleCode.equals(inst.getModuleCode())) {
+                    continue;
                 }
+                if (flowCode != null && !flowCode.equals(inst.getFlowCode())) {
+                    continue;
+                }
+                if (typeCode != null && !typeCode.isEmpty() && !typeCode.equals(inst.getAssetTypeId())) {
+                    continue;
+                }
+                filteredTasks.add(t);
             }
             taskList = filteredTasks;
         }
@@ -2721,6 +2708,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 vo.setFlowName(flow != null ? flow.getFlowName() : "");
                 vo.setInstanceName(inst.getInstanceName());
+                vo.setModuleCode(inst.getModuleCode());
+                vo.setAssetTypeId(inst.getAssetTypeId());
 
                 SysUser applicant = sysUserService.getById(inst.getApplicantId());
                 vo.setApplicantName(applicant != null ? applicant.getUsername() : "");
@@ -2740,8 +2729,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     vo.setSourceOrgName(srcOrg != null ? srcOrg.getName() : "");
                 }
                 // 填充资产类型信息
-                if (flow != null && flow.getAssetTypeId() != null) {
-                    AssetType assetType = assetTypeMapper.selectById(flow.getAssetTypeId());
+                if (inst.getAssetTypeId() != null) {
+                    AssetType assetType = getAssetTypeByCode(inst.getAssetTypeId());
                     if (assetType != null) {
                         vo.setTypeCode(assetType.getTypeCode());
                         vo.setAssetTypeName(assetType.getTypeName());
@@ -2792,11 +2781,6 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         List<FlowTask> taskList = taskPage.getRecords();
 
         if (StringUtils.hasText(flowCode) || StringUtils.hasText(moduleCode) || StringUtils.hasText(typeCode)) {
-            AssetType typeFilterAssetType = null;
-            if (StringUtils.hasText(typeCode)) {
-                typeFilterAssetType = assetTypeMapper.selectOne(
-                        new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
-            }
             List<FlowTask> filteredTasks = new ArrayList<>();
             for (FlowTask t : taskList) {
                 FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
@@ -2804,8 +2788,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 if (flow == null) continue;
                 if (StringUtils.hasText(flowCode) && !flowCode.equals(inst.getFlowCode())) continue;
-                if (StringUtils.hasText(moduleCode) && !moduleCode.equals(flow.getModuleCode())) continue;
-                if (typeFilterAssetType != null && !typeFilterAssetType.getTypeCode().equals(flow.getAssetTypeId())) continue;
+                if (StringUtils.hasText(moduleCode) && !moduleCode.equals(inst.getModuleCode())) continue;
+                if (StringUtils.hasText(typeCode) && !typeCode.equals(inst.getAssetTypeId())) continue;
                 if (StringUtils.hasText(tenantCode)) {
                     String effectiveTenantCode = t.getTenantCode() != null ? t.getTenantCode() : inst.getTenantCode();
                     if (effectiveTenantCode == null || !tenantCode.equals(effectiveTenantCode)) continue;
@@ -2826,6 +2810,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 vo.setFlowName(flow != null ? flow.getFlowName() : "");
                 vo.setInstanceName(inst.getInstanceName());
+                vo.setModuleCode(inst.getModuleCode());
+                vo.setAssetTypeId(inst.getAssetTypeId());
 
                 SysUser applicant = sysUserService.getById(inst.getApplicantId());
                 vo.setApplicantName(applicant != null ? applicant.getUsername() : "");
@@ -2842,8 +2828,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     BankOrg srcOrg = bankOrgMapper.selectById(t.getSourceOrgId());
                     vo.setSourceOrgName(srcOrg != null ? srcOrg.getName() : "");
                 }
-                if (flow != null && flow.getAssetTypeId() != null) {
-                    AssetType assetType = assetTypeMapper.selectById(flow.getAssetTypeId());
+                if (inst.getAssetTypeId() != null) {
+                    AssetType assetType = getAssetTypeByCode(inst.getAssetTypeId());
                     if (assetType != null) {
                         vo.setTypeCode(assetType.getTypeCode());
                         vo.setAssetTypeName(assetType.getTypeName());

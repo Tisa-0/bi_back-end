@@ -45,9 +45,4 @@ public class FlowDefinition implements Serializable {
     // 是否需要上传凭证（1需要，0不需要）
     private Integer needAttachment;
 
-    // 流程所属模块（A/B/C）
-    private String moduleCode;
-
-    // 流程所属资产类型编码（asset_type.type_code）
-    private String assetTypeId;
 }

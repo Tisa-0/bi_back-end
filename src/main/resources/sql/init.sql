@@ -15,8 +15,6 @@ CREATE TABLE `flow_definition`  (
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` tinyint(4) NULL DEFAULT 0 COMMENT '逻辑删除',
   `need_attachment` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
-  `module_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '流程所属模块（A/B/C）',
-  `asset_type_id` bigint(20) NULL DEFAULT NULL COMMENT '流程所属资产类型ID（asset_type.id）',
   PRIMARY KEY (`flow_code`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '流程定义表' ROW_FORMAT = Compact;
 
@@ -30,6 +28,8 @@ CREATE TABLE `flow_instance`  (
   `flow_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '关联流程编码',
   `instance_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '实例名称（如：张三-3天请假）',
   `applicant_id` bigint(20) NOT NULL COMMENT '申请人ID（bmip_sys_usrinf.usrid）',
+  `module_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '发起时选择的模块编码',
+  `asset_type_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '发起时选择的资产类型编码（asset_type.type_code）',
   `tenant_code` varchar(48) NULL DEFAULT NULL COMMENT '租户编码（产品智能定制模块需要）',
   `current_node_key` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '当前节点标识',
   `current_node_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT '' COMMENT '当前节点名称',

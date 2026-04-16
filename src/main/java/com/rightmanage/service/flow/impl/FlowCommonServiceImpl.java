@@ -79,10 +79,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         // 如果指定了模块编码，需要过滤
         if (StringUtils.hasText(moduleCode)) {
             instanceList = instanceList.stream()
-                    .filter(instance -> {
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
-                        return flow != null && moduleCode.equals(flow.getModuleCode());
-                    })
+                    .filter(instance -> moduleCode.equals(instance.getModuleCode()))
                     .collect(Collectors.toList());
         }
 
@@ -118,10 +115,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         // 如果指定了模块编码，需要过滤
         if (StringUtils.hasText(moduleCode)) {
             instanceList = instanceList.stream()
-                    .filter(instance -> {
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
-                        return flow != null && moduleCode.equals(flow.getModuleCode());
-                    })
+                    .filter(instance -> moduleCode.equals(instance.getModuleCode()))
                     .collect(Collectors.toList());
         }
 
@@ -148,10 +142,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         // 如果指定了模块编码，需要过滤
         if (StringUtils.hasText(moduleCode)) {
             instanceList = instanceList.stream()
-                    .filter(instance -> {
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
-                        return flow != null && moduleCode.equals(flow.getModuleCode());
-                    })
+                    .filter(instance -> moduleCode.equals(instance.getModuleCode()))
                     .collect(Collectors.toList());
         }
 
@@ -515,14 +506,10 @@ public class FlowCommonServiceImpl implements FlowCommonService {
                         if (tenantCode != null && !tenantCode.trim().isEmpty() && !tenantCode.equals(instance.getTenantCode())) {
                             return false;
                         }
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
-                        if (flow == null) {
+                        if (StringUtils.hasText(moduleCode) && !moduleCode.equals(instance.getModuleCode())) {
                             return false;
                         }
-                        if (StringUtils.hasText(moduleCode) && !moduleCode.equals(flow.getModuleCode())) {
-                            return false;
-                        }
-                        if (flowCode != null && !flowCode.equals(flow.getFlowCode())) {
+                        if (flowCode != null && !flowCode.equals(instance.getFlowCode())) {
                             return false;
                         }
                         return true;
@@ -577,7 +564,6 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     @Override
     public List<FlowDefinition> getFlowsByModule(String moduleCode) {
         LambdaQueryWrapper<FlowDefinition> wrapper = new LambdaQueryWrapper<FlowDefinition>()
-                .eq(FlowDefinition::getModuleCode, moduleCode)
                 .eq(FlowDefinition::getStatus, 1)
                 .orderByDesc(FlowDefinition::getCreateTime);
 

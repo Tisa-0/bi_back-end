@@ -10,6 +10,8 @@ import java.util.Date;
 public class FlowInstanceVO {
     private String instanceId;
     private String flowCode;
+    private String moduleCode;
+    private String assetTypeId;
     private String flowName;
     private String instanceName;
     private Long applicantId;

@@ -11,6 +11,8 @@ import java.util.Map;
 public class FlowStartDTO {
     private String flowCode;
     private String instanceName;
+    private String moduleCode; // 发起时选择的模块编码
+    private String assetTypeId; // 发起时选择的资产类型编码（asset_type.type_code）
     private String tenantCode; // 租户编码（产品智能定制模块需要）
     private String attachmentUrl; // 凭证文件URL
     private String attachmentName; // 凭证文件名

@@ -25,6 +25,12 @@ public class FlowInstance implements Serializable {
     @TableField("tenant_code")
     private String tenantCode; // 租户编码（产品智能定制模块需要）
 
+    @TableField("module_code")
+    private String moduleCode; // 发起时选择的模块编码
+
+    @TableField("asset_type_id")
+    private String assetTypeId; // 发起时选择的资产类型编码（asset_type.type_code）
+
     private String currentNodeKey;
 
     private String currentNodeName;

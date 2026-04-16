@@ -8,7 +8,6 @@ import com.rightmanage.entity.BankOrg;
 import com.rightmanage.entity.SysUser;
 import com.rightmanage.entity.SysUserOrgAuth;
 import com.rightmanage.entity.SysUserRole;
-import com.rightmanage.entity.flow.FlowDefinition;
 import com.rightmanage.entity.flow.FlowInstance;
 import com.rightmanage.entity.flow.FlowNodeConfig;
 import com.rightmanage.entity.flow.FlowTask;
@@ -204,8 +203,7 @@ public class SysUserServiceImpl implements SysUserService {
         for (FlowInstance instance : runningInstances) {
             // 如果指定了模块，需要检查流程是否属于该模块
             if (StringUtils.hasText(moduleCode)) {
-                FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
-                if (flow == null || !moduleCode.equals(flow.getModuleCode())) {
+                if (!moduleCode.equals(instance.getModuleCode())) {
                     continue;
                 }
             }

@@ -19,6 +19,4 @@ public class FlowDefinitionDetailDTO {
     private Boolean needTenant; // 是否需要租户（判断是否包含产品智能定制角色）
     private Integer canInitiate; // 是否允许主动发起（1允许，0不允许）
     private Integer needAttachment; // 是否需要上传凭证（1需要，0不需要）
-    private String moduleCode; // 流程所属模块（A/B/C）
-    private String assetTypeId; // 流程所属资产类型编码
 }

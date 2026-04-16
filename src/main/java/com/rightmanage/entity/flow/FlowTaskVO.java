@@ -11,6 +11,8 @@ public class FlowTaskVO {
     private String taskId;
     private String instanceId;
     private String flowCode;  // 流程定义编码（用于前端查询流程详情）
+    private String moduleCode; // 发起时选择的模块编码
+    private String assetTypeId; // 发起时选择的资产类型编码
     private String flowName;
     private String instanceName;
     private String nodeKey;
