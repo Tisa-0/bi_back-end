@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +37,8 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     @Autowired
     private FlowTaskMapper flowTaskMapper;
     @Autowired
+    private FlowTemplateParamMapper flowTemplateParamMapper;
+    @Autowired
     private FlowInstanceParamMapper flowInstanceParamMapper;
     @Autowired
     private FlowOperationLogMapper flowOperationLogMapper;
@@ -49,7 +52,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     // ==================== 审批记录查询 ====================
 
     @Override
-    public IPage<FlowInstanceVO> getApprovalRecords(String moduleCode, Long flowId, Long tenantId,
+    public IPage<FlowInstanceVO> getApprovalRecords(String moduleCode, String flowCode, String tenantCode,
                                                       Integer status, Long applicantId, Integer pageNum, Integer pageSize) {
         Page<FlowInstance> page = new Page<>(pageNum, pageSize);
         
@@ -57,11 +60,11 @@ public class FlowCommonServiceImpl implements FlowCommonService {
                 .eq(FlowInstance::getDeleted, 0)
                 .orderByDesc(FlowInstance::getCreateTime);
 
-        if (flowId != null) {
-            wrapper.eq(FlowInstance::getFlowId, flowId);
+        if (flowCode != null) {
+            wrapper.eq(FlowInstance::getFlowCode, flowCode);
         }
-        if (tenantId != null) {
-            wrapper.eq(FlowInstance::getTenantId, tenantId);
+        if (tenantCode != null && !tenantCode.trim().isEmpty()) {
+            wrapper.eq(FlowInstance::getTenantCode, tenantCode);
         }
         if (status != null) {
             wrapper.eq(FlowInstance::getStatus, status);
@@ -77,7 +80,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         if (StringUtils.hasText(moduleCode)) {
             instanceList = instanceList.stream()
                     .filter(instance -> {
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
                         return flow != null && moduleCode.equals(flow.getModuleCode());
                     })
                     .collect(Collectors.toList());
@@ -95,16 +98,16 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public List<FlowInstanceVO> getApprovalRecords(String moduleCode, Long flowId, Long tenantId, Integer status) {
+    public List<FlowInstanceVO> getApprovalRecords(String moduleCode, String flowCode, String tenantCode, Integer status) {
         LambdaQueryWrapper<FlowInstance> wrapper = new LambdaQueryWrapper<FlowInstance>()
                 .eq(FlowInstance::getDeleted, 0)
                 .orderByDesc(FlowInstance::getCreateTime);
 
-        if (flowId != null) {
-            wrapper.eq(FlowInstance::getFlowId, flowId);
+        if (flowCode != null) {
+            wrapper.eq(FlowInstance::getFlowCode, flowCode);
         }
-        if (tenantId != null) {
-            wrapper.eq(FlowInstance::getTenantId, tenantId);
+        if (tenantCode != null && !tenantCode.trim().isEmpty()) {
+            wrapper.eq(FlowInstance::getTenantCode, tenantCode);
         }
         if (status != null) {
             wrapper.eq(FlowInstance::getStatus, status);
@@ -116,7 +119,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         if (StringUtils.hasText(moduleCode)) {
             instanceList = instanceList.stream()
                     .filter(instance -> {
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
                         return flow != null && moduleCode.equals(flow.getModuleCode());
                     })
                     .collect(Collectors.toList());
@@ -146,7 +149,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         if (StringUtils.hasText(moduleCode)) {
             instanceList = instanceList.stream()
                     .filter(instance -> {
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
                         return flow != null && moduleCode.equals(flow.getModuleCode());
                     })
                     .collect(Collectors.toList());
@@ -167,7 +170,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
             FlowInstanceVO vo = new FlowInstanceVO();
             BeanUtils.copyProperties(instance, vo);
 
-            FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+            FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
             vo.setFlowName(flow != null ? flow.getFlowName() : "");
 
             FlowInstanceStatus statusEnum = FlowInstanceStatus.fromCode(instance.getStatus());
@@ -181,7 +184,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     // ==================== 审批记录详情 ====================
 
     @Override
-    public FlowTaskVO getCurrentNode(Long instanceId) {
+    public FlowTaskVO getCurrentNode(String instanceId) {
         // 查询该实例下状态为待处理的任务（当前节点）
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
                 .eq(FlowTask::getInstanceId, instanceId)
@@ -203,7 +206,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         // 补充流程信息
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance != null) {
-            FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+            FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
             vo.setFlowName(flow != null ? flow.getFlowName() : "");
             vo.setInstanceName(instance.getInstanceName());
 
@@ -215,7 +218,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public List<FlowTaskVO> getFlowNodes(Long instanceId) {
+    public List<FlowTaskVO> getFlowNodes(String instanceId) {
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
                 .eq(FlowTask::getInstanceId, instanceId)
                 .eq(FlowTask::getDeleted, 0)
@@ -243,13 +246,13 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public FlowDetailVO getFlowDetail(Long instanceId) {
+    public FlowDetailVO getFlowDetail(String instanceId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             return null;
         }
 
-        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
         SysUser applicant = sysUserService.getById(instance.getApplicantId());
 
         FlowDetailVO detailVO = new FlowDetailVO();
@@ -271,7 +274,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     // ==================== 自定义参数 ====================
 
     @Override
-    public Map<String, Object> getFlowParams(Long instanceId) {
+    public Map<String, Object> getFlowParams(String instanceId) {
         List<FlowInstanceParam> params = Arrays.asList(flowInstanceParamMapper.findByInstanceId(instanceId));
 
         Map<String, Object> result = new HashMap<>();
@@ -283,18 +286,23 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public Object getFlowParamValue(Long instanceId, String paramCode) {
+    public Object getFlowParamValue(String instanceId, String paramCode) {
         FlowInstanceParam param = flowInstanceParamMapper.findByInstanceIdAndParamCode(instanceId, paramCode);
         return param != null ? param.getParamValue() : null;
     }
 
     @Override
-    public void setFlowParamValue(Long instanceId, String paramCode, Object paramValue) {
+    public void setFlowParamValue(String instanceId, String paramCode, Object paramValue) {
         FlowInstanceParam param = flowInstanceParamMapper.findByInstanceIdAndParamCode(instanceId, paramCode);
 
         if (param == null) {
             param = new FlowInstanceParam();
+            param.setInstanceParamId(UUID.randomUUID().toString().replace("-", ""));
             param.setInstanceId(instanceId);
+            String definitionParamId = resolveDefinitionParamId(instanceId, paramCode);
+            if (definitionParamId != null) {
+                param.setDefinitionParamId(definitionParamId);
+            }
             param.setParamCode(paramCode);
             param.setParamValue(paramValue != null ? paramValue.toString() : null);
             param.setCreateTime(new Date());
@@ -306,7 +314,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public void setFlowParams(Long instanceId, Map<String, Object> params) {
+    public void setFlowParams(String instanceId, Map<String, Object> params) {
         if (params == null || params.isEmpty()) {
             return;
         }
@@ -316,10 +324,30 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         }
     }
 
+    private String resolveDefinitionParamId(String instanceId, String paramCode) {
+        if (!StringUtils.hasText(instanceId) || !StringUtils.hasText(paramCode)) {
+            return null;
+        }
+        FlowInstance instance = flowInstanceMapper.selectById(instanceId);
+        if (instance == null || !StringUtils.hasText(instance.getFlowCode())) {
+            return null;
+        }
+        List<FlowTemplateParam> definitionParams = flowTemplateParamMapper.findByTemplateId(instance.getFlowCode());
+        if (definitionParams == null || definitionParams.isEmpty()) {
+            return null;
+        }
+        for (FlowTemplateParam definitionParam : definitionParams) {
+            if (paramCode.equals(definitionParam.getParamCode())) {
+                return definitionParam.getDefinitionParamId();
+            }
+        }
+        return null;
+    }
+
     // ==================== 流程操作 ====================
 
     @Override
-    public void approveFlow(Long instanceId, Long userId, String comment) {
+    public void approveFlow(String instanceId, Long userId, String comment) {
         // 获取当前待处理任务
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
                 .eq(FlowTask::getInstanceId, instanceId)
@@ -334,11 +362,11 @@ public class FlowCommonServiceImpl implements FlowCommonService {
             throw new RuntimeException("没有找到待处理的任务");
         }
 
-        approveTask(task.getId(), "approve", comment, userId);
+        approveTask(task.getTaskId(), "approve", comment, userId);
     }
 
     @Override
-    public void rejectFlow(Long instanceId, Long userId, String comment) {
+    public void rejectFlow(String instanceId, Long userId, String comment) {
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
                 .eq(FlowTask::getInstanceId, instanceId)
                 .eq(FlowTask::getStatus, 0)
@@ -352,16 +380,16 @@ public class FlowCommonServiceImpl implements FlowCommonService {
             throw new RuntimeException("没有找到待处理的任务");
         }
 
-        approveTask(task.getId(), "reject", comment, userId);
+        approveTask(task.getTaskId(), "reject", comment, userId);
     }
 
     @Override
-    public void approveTask(Long taskId, String action, String comment, Long userId) {
+    public void approveTask(String taskId, String action, String comment, Long userId) {
         flowInstanceService.approveFlow(taskId, action, comment, userId);
     }
 
     @Override
-    public void cancelFlow(Long instanceId, Long userId) {
+    public void cancelFlow(String instanceId, Long userId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             throw new RuntimeException("流程实例不存在");
@@ -383,7 +411,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public void terminateFlow(Long instanceId, Long userId) {
+    public void terminateFlow(String instanceId, Long userId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             throw new RuntimeException("流程实例不存在");
@@ -401,46 +429,46 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public Long startFlow(Long flowId, String instanceName, Long userId, Long tenantId) {
-        return startFlow(flowId, instanceName, userId, tenantId, null);
+    public String startFlow(String flowCode, String instanceName, Long userId, String tenantCode) {
+        return startFlow(flowCode, instanceName, userId, tenantCode, null);
     }
 
     @Override
-    public Long startFlow(Long flowId, String instanceName, Long userId, Long tenantId, Map<String, Object> params) {
+    public String startFlow(String flowCode, String instanceName, Long userId, String tenantCode, Map<String, Object> params) {
         FlowStartDTO dto = new FlowStartDTO();
-        dto.setFlowId(flowId);
+        dto.setFlowCode(flowCode);
         dto.setInstanceName(instanceName);
-        dto.setTenantId(tenantId);
+        dto.setTenantCode(tenantCode);
         dto.setParams(params);
 
         // 这里需要调用 FlowInstanceService 的 startFlow 方法
         // 为了避免循环依赖，这里通过 Controller 来调用
         // 或者可以注入 FlowInstanceServiceImpl
-        return null; // 需要在 Controller 层调用
+        return flowInstanceService.startFlow(dto, userId);
     }
 
     // ==================== 流程状态查询 ====================
 
     @Override
-    public boolean isRunning(Long instanceId) {
+    public boolean isRunning(String instanceId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         return instance != null && FlowInstanceStatus.RUNNING.getCode().equals(instance.getStatus());
     }
 
     @Override
-    public boolean isCompleted(Long instanceId) {
+    public boolean isCompleted(String instanceId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         return instance != null && FlowInstanceStatus.COMPLETED.getCode().equals(instance.getStatus());
     }
 
     @Override
-    public Integer getFlowStatus(Long instanceId) {
+    public Integer getFlowStatus(String instanceId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         return instance != null ? instance.getStatus() : null;
     }
 
     @Override
-    public String getFlowStatusName(Long instanceId) {
+    public String getFlowStatusName(String instanceId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             return null;
@@ -452,19 +480,19 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     // ==================== 待办任务 ====================
 
     @Override
-    public IPage<FlowTaskVO> getPendingTasks(Long userId, String moduleCode, Long flowId, Long tenantId,
-                                              Integer pageNum, Integer pageSize) {
-        return getTasks(userId, 0, moduleCode, flowId, tenantId, pageNum, pageSize);
+    public IPage<FlowTaskVO> getPendingTasks(Long userId, String moduleCode, String flowCode, String tenantCode,
+                                               Integer pageNum, Integer pageSize) {
+        return getTasks(userId, 0, moduleCode, flowCode, tenantCode, pageNum, pageSize);
     }
 
     @Override
-    public IPage<FlowTaskVO> getProcessedTasks(Long userId, String moduleCode, Long flowId, Long tenantId,
-                                                 Integer pageNum, Integer pageSize) {
-        return getTasks(userId, 1, moduleCode, flowId, tenantId, pageNum, pageSize);
+    public IPage<FlowTaskVO> getProcessedTasks(Long userId, String moduleCode, String flowCode, String tenantCode,
+                                                  Integer pageNum, Integer pageSize) {
+        return getTasks(userId, 1, moduleCode, flowCode, tenantCode, pageNum, pageSize);
     }
 
-    private IPage<FlowTaskVO> getTasks(Long userId, Integer taskStatus, String moduleCode, Long flowId,
-                                         Long tenantId, Integer pageNum, Integer pageSize) {
+    private IPage<FlowTaskVO> getTasks(Long userId, Integer taskStatus, String moduleCode, String flowCode,
+                                         String tenantCode, Integer pageNum, Integer pageSize) {
         Page<FlowTask> page = new Page<>(pageNum, pageSize);
 
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
@@ -477,24 +505,24 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         List<FlowTask> taskList = taskPage.getRecords();
 
         // 过滤
-        if (StringUtils.hasText(moduleCode) || tenantId != null || flowId != null) {
+        if (StringUtils.hasText(moduleCode) || (tenantCode != null && !tenantCode.trim().isEmpty()) || flowCode != null) {
             taskList = taskList.stream()
                     .filter(task -> {
                         FlowInstance instance = flowInstanceMapper.selectById(task.getInstanceId());
                         if (instance == null) {
                             return false;
                         }
-                        if (tenantId != null && !tenantId.equals(instance.getTenantId())) {
+                        if (tenantCode != null && !tenantCode.trim().isEmpty() && !tenantCode.equals(instance.getTenantCode())) {
                             return false;
                         }
-                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+                        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
                         if (flow == null) {
                             return false;
                         }
                         if (StringUtils.hasText(moduleCode) && !moduleCode.equals(flow.getModuleCode())) {
                             return false;
                         }
-                        if (flowId != null && !flowId.equals(flow.getId())) {
+                        if (flowCode != null && !flowCode.equals(flow.getFlowCode())) {
                             return false;
                         }
                         return true;
@@ -521,7 +549,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
 
             FlowInstance instance = flowInstanceMapper.selectById(task.getInstanceId());
             if (instance != null) {
-                FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+                FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
                 vo.setFlowName(flow != null ? flow.getFlowName() : "");
                 vo.setInstanceName(instance.getInstanceName());
 
@@ -557,14 +585,14 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public FlowDefinition getFlowDefinition(Long flowId) {
-        return flowDefinitionMapper.selectById(flowId);
+    public FlowDefinition getFlowDefinition(String flowCode) {
+        return flowDefinitionMapper.selectById(flowCode);
     }
 
     // ==================== 流程日志 ====================
 
     @Override
-    public List<FlowOperationLog> getFlowLogs(Long instanceId) {
+    public List<FlowOperationLog> getFlowLogs(String instanceId) {
         LambdaQueryWrapper<FlowOperationLog> wrapper = new LambdaQueryWrapper<FlowOperationLog>()
                 .eq(FlowOperationLog::getInstanceId, instanceId)
                 .orderByAsc(FlowOperationLog::getOperationTime);
@@ -573,7 +601,7 @@ public class FlowCommonServiceImpl implements FlowCommonService {
     }
 
     @Override
-    public void saveFlowLog(Long instanceId, Long userId, String operationType, String operationDesc) {
+    public void saveFlowLog(String instanceId, Long userId, String operationType, String operationDesc) {
         logService.saveLog(instanceId, userId, sysUserService.getById(userId).getUsername(),
                 operationType, operationDesc);
     }
@@ -583,3 +611,6 @@ public class FlowCommonServiceImpl implements FlowCommonService {
         return flowInstanceService.queryFlow(dto);
     }
 }
+
+
+

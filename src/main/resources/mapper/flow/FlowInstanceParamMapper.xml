@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rightmanage.mapper.flow.FlowInstanceParamMapper">
+
+  <resultMap id="FlowInstanceParamMap" type="com.rightmanage.entity.flow.FlowInstanceParam">
+    <id property="instanceParamId" column="instance_param_id"/>
+    <result property="instanceId" column="instance_id"/>
+    <result property="definitionParamId" column="definition_param_id"/>
+    <result property="paramCode" column="param_code"/>
+    <result property="paramValue" column="param_value"/>
+    <result property="paramValueLabel" column="param_value_label"/>
+    <result property="createTime" column="create_time"/>
+  </resultMap>
+
+  <select id="findByInstanceId" resultMap="FlowInstanceParamMap">
+    SELECT instance_param_id, instance_id, definition_param_id, param_code, param_value, param_value_label, create_time
+    FROM flow_instance_param
+    WHERE instance_id = #{instanceId}
+  </select>
+
+  <select id="findByInstanceIdAndParamCode" resultMap="FlowInstanceParamMap">
+    SELECT instance_param_id, instance_id, definition_param_id, param_code, param_value, param_value_label, create_time
+    FROM flow_instance_param
+    WHERE instance_id = #{instanceId}
+      AND param_code = #{paramCode}
+    LIMIT 1
+  </select>
+
+  <insert id="batchSave">
+    INSERT INTO flow_instance_param (
+      instance_param_id, instance_id, definition_param_id, param_code, param_value, param_value_label
+    ) VALUES
+    <foreach collection="params" item="item" separator=",">
+      (#{item.instanceParamId}, #{item.instanceId}, #{item.definitionParamId}, #{item.paramCode}, #{item.paramValue}, #{item.paramValueLabel})
+    </foreach>
+  </insert>
+
+  <delete id="deleteByInstanceId">
+    DELETE FROM flow_instance_param
+    WHERE instance_id = #{instanceId}
+  </delete>
+
+</mapper>

@@ -9,11 +9,9 @@ import java.util.Date;
 public class SysRole implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
     private String roleName;
 
+    @TableId(value = "role_code", type = IdType.INPUT)
     private String roleCode;
 
     private String description;
@@ -29,8 +27,8 @@ public class SysRole implements Serializable {
     @TableLogic
     private Integer deleted;
 
-    @TableField("tenant_id")
-    private Long tenantId;
+    @TableField("tenant_code")
+    private String tenantCode;
 
     @TableField("org_related")
     private Boolean orgRelated;

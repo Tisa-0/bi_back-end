@@ -22,7 +22,7 @@ public class FlowTemplateParamController {
      * 获取流程模板参数列表
      */
     @GetMapping("/params")
-    public Result<List<FlowTemplateParam>> getParams(@RequestParam Long templateId) {
+    public Result<List<FlowTemplateParam>> getParams(@RequestParam String templateId) {
         List<FlowTemplateParam> params = flowTemplateParamService.getParamsByTemplateId(templateId);
         return Result.success(params);
     }
@@ -31,7 +31,7 @@ public class FlowTemplateParamController {
      * 保存流程模板参数
      */
     @PostMapping("/params")
-    public Result<?> saveParams(@RequestParam Long templateId, @RequestBody List<FlowTemplateParam> params) {
+    public Result<?> saveParams(@RequestParam String templateId, @RequestBody List<FlowTemplateParam> params) {
         flowTemplateParamService.saveParams(templateId, params);
         return Result.success();
     }
@@ -40,7 +40,7 @@ public class FlowTemplateParamController {
      * 删除流程模板参数
      */
     @DeleteMapping("/param/{id}")
-    public Result<?> deleteParam(@PathVariable Long id) {
+    public Result<?> deleteParam(@PathVariable String id) {
         flowTemplateParamService.deleteParam(id);
         return Result.success();
     }

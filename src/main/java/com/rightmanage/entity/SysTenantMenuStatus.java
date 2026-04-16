@@ -9,18 +9,17 @@ import java.util.Date;
 public class SysTenantMenuStatus implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
     /**
-     * 租户ID
+     * 租户编码
      */
-    private Long tenantId;
+    @TableField("tenant_code")
+    private String tenantCode;
 
     /**
      * 关联sys_menu的菜单ID
      */
-    private Long menuId;
+    @TableField("menu_id")
+    private String menuId;
 
     /**
      * 菜单状态（1启用0禁用，仅对该租户生效）

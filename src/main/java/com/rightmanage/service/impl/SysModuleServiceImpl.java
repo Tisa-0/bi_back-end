@@ -6,6 +6,7 @@ import com.rightmanage.mapper.SysModuleMapper;
 import com.rightmanage.service.SysModuleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,7 +38,6 @@ public class SysModuleServiceImpl implements SysModuleService {
         module.setModuleName(name);
         module.setMultiTenant(multiTenant);
         module.setStatus(1);
-        // 不设置ID，让数据库自动生成，避免删除后重新插入时ID冲突
         return module;
     }
 
@@ -96,7 +96,7 @@ public class SysModuleServiceImpl implements SysModuleService {
     public List<SysModule> listEnabled() {
         LambdaQueryWrapper<SysModule> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(SysModule::getStatus, 1);
-        queryWrapper.orderByAsc(SysModule::getId);
+        queryWrapper.orderByAsc(SysModule::getModuleCode);
         List<SysModule> dbModules = sysModuleMapper.selectList(queryWrapper);
 
         // 如果数据库中没有模块，初始化固定模块
@@ -116,8 +116,11 @@ public class SysModuleServiceImpl implements SysModuleService {
     }
 
     @Override
-    public SysModule getById(Long id) {
-        return sysModuleMapper.selectById(id);
+    public SysModule getById(String moduleCode) {
+        if (moduleCode == null || moduleCode.trim().isEmpty()) {
+            return null;
+        }
+        return sysModuleMapper.selectById(moduleCode);
     }
 
     @Override
@@ -179,22 +182,25 @@ public class SysModuleServiceImpl implements SysModuleService {
         if (module.getModuleCode() != null) {
             checkFixedModule(module.getModuleCode());
         }
-        // 检查原模块是否为固定模块
-        if (module.getId() != null) {
-            SysModule existing = sysModuleMapper.selectById(module.getId());
-            if (existing != null && isFixedModule(existing.getModuleCode())) {
-                throw new RuntimeException("固定模块（" + existing.getModuleCode() + "）不允许修改");
-            }
+        if (!StringUtils.hasText(module.getModuleCode())) {
+            return false;
+        }
+        SysModule existing = getById(module.getModuleCode());
+        if (existing != null && isFixedModule(existing.getModuleCode())) {
+            throw new RuntimeException("固定模块（" + existing.getModuleCode() + "）不允许修改");
         }
         return sysModuleMapper.updateById(module) > 0;
     }
 
     @Override
-    public boolean deleteById(Long id) {
-        SysModule existing = sysModuleMapper.selectById(id);
+    public boolean deleteById(String moduleCode) {
+        SysModule existing = getById(moduleCode);
         if (existing != null && isFixedModule(existing.getModuleCode())) {
             throw new RuntimeException("固定模块（" + existing.getModuleCode() + "）不允许删除");
         }
-        return sysModuleMapper.deleteById(id) > 0;
+        if (existing == null || existing.getModuleCode() == null) {
+            return false;
+        }
+        return sysModuleMapper.deleteById(existing.getModuleCode()) > 0;
     }
 }

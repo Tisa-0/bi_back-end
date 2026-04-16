@@ -30,9 +30,9 @@ public class FlowDefinitionController {
     /**
      * 获取流程定义详情（包含节点信息）
      */
-    @GetMapping("/{id}")
-    public Result<FlowDefinitionDetailDTO> getById(@PathVariable Long id) {
-        FlowDefinitionDetailDTO detail = flowDefinitionService.getFlowDefinitionDetail(id);
+    @GetMapping("/{flowCode}")
+    public Result<FlowDefinitionDetailDTO> getById(@PathVariable String flowCode) {
+        FlowDefinitionDetailDTO detail = flowDefinitionService.getFlowDefinitionDetail(flowCode);
         return Result.success(detail);
     }
 
@@ -65,21 +65,21 @@ public class FlowDefinitionController {
     /**
      * 删除流程定义
      */
-    @DeleteMapping("/{id}")
-    public Result<?> delete(@PathVariable Long id) {
-        flowDefinitionService.deleteFlowDefinition(id);
+    @DeleteMapping("/{flowCode}")
+    public Result<?> delete(@PathVariable String flowCode) {
+        flowDefinitionService.deleteFlowDefinition(flowCode);
         return Result.success();
     }
 
     /**
      * 检查流程编码是否已存在（用于前端实时校验或保存前校验）
      * @param flowCode 流程编码
-     * @param excludeId 排除的流程ID（编辑时传入，保存时可不传或传null）
+     * @param excludeFlowCode 排除的流程编码（编辑时传入，保存时可不传或传null）
      */
     @GetMapping("/checkCode")
     public Result<Boolean> checkFlowCode(@RequestParam String flowCode,
-                                          @RequestParam(required = false) Long excludeId) {
-        boolean exists = flowDefinitionService.checkFlowCodeExists(flowCode, excludeId);
+                                          @RequestParam(required = false) String excludeFlowCode) {
+        boolean exists = flowDefinitionService.checkFlowCodeExists(flowCode, excludeFlowCode);
         return Result.success(exists);
     }
 }

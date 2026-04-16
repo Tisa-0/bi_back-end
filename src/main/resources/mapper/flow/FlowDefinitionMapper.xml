@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rightmanage.mapper.flow.FlowDefinitionMapper">
+
+  <select id="selectByFlowCode" resultType="com.rightmanage.entity.flow.FlowDefinition">
+    SELECT * FROM flow_definition
+    WHERE flow_code = #{flowCode}
+      AND deleted = 0
+    LIMIT 1
+  </select>
+
+</mapper>

@@ -26,12 +26,12 @@ public interface FlowDefinitionService {
     /**
      * 获取流程定义详情
      */
-    FlowDefinitionDetailDTO getFlowDefinitionDetail(Long id);
+    FlowDefinitionDetailDTO getFlowDefinitionDetail(String flowCode);
 
     /**
      * 删除流程定义
      */
-    void deleteFlowDefinition(Long id);
+    void deleteFlowDefinition(String flowCode);
 
     /**
      * 获取当前用户可发起的流程列表
@@ -41,13 +41,13 @@ public interface FlowDefinitionService {
     /**
      * 检查流程是否需要租户（判断是否包含产品智能定制模块的角色）
      */
-    boolean checkFlowNeedTenant(Long flowId);
+    boolean checkFlowNeedTenant(String flowCode);
 
     /**
      * 检查流程编码是否存在（排除指定ID，可用于编辑时的重复校验）
      * @param flowCode 流程编码
-     * @param excludeId 排除的流程ID（编辑时传入，保存时传null）
+     * @param excludeFlowCode 排除的流程编码（编辑时传入，保存时传null）
      * @return true=已存在，false=可用
      */
-    boolean checkFlowCodeExists(String flowCode, Long excludeId);
+    boolean checkFlowCodeExists(String flowCode, String excludeFlowCode);
 }

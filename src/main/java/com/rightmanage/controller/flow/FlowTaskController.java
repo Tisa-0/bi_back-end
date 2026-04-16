@@ -29,13 +29,13 @@ public class FlowTaskController {
             @RequestParam Long userId,
             @RequestParam(required = false) String moduleCode,
             @RequestParam(required = false) String tenantCode,
-            @RequestParam(required = false) Long flowId,
+            @RequestParam(required = false) String flowCode,
             @RequestParam(required = false) String typeCode,
             @RequestParam(required = false) String nodeKey,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
         // taskStatus = 0 表示待处理
-        return Result.success(flowInstanceService.myApproval(userId, 0, moduleCode, tenantCode, flowId, typeCode, nodeKey, pageNum, pageSize));
+        return Result.success(flowInstanceService.myApproval(userId, 0, moduleCode, tenantCode, flowCode, typeCode, nodeKey, pageNum, pageSize));
     }
 
     /**
@@ -47,12 +47,12 @@ public class FlowTaskController {
             @RequestParam Integer taskStatus,
             @RequestParam(required = false) String moduleCode,
             @RequestParam(required = false) String tenantCode,
-            @RequestParam(required = false) Long flowId,
+            @RequestParam(required = false) String flowCode,
             @RequestParam(required = false) String typeCode,
             @RequestParam(required = false) String nodeKey,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(flowInstanceService.myApproval(userId, taskStatus, moduleCode, tenantCode, flowId, typeCode, nodeKey, pageNum, pageSize));
+        return Result.success(flowInstanceService.myApproval(userId, taskStatus, moduleCode, tenantCode, flowCode, typeCode, nodeKey, pageNum, pageSize));
     }
 
     /**
@@ -73,13 +73,12 @@ public class FlowTaskController {
             @RequestParam(required = false) Integer taskStatus,
             @RequestParam(required = false) String moduleCode,
             @RequestParam(required = false) String tenantCode,
-            @RequestParam(required = false) Long flowId,
             @RequestParam(required = false) String flowCode,
             @RequestParam(required = false) String typeCode,
             @RequestParam(required = false) String nodeKey,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
         return Result.success(flowInstanceService.adminAllTasks(
-                taskStatus, moduleCode, tenantCode, flowId, flowCode, typeCode, nodeKey, pageNum, pageSize));
+                taskStatus, moduleCode, tenantCode, flowCode, typeCode, nodeKey, pageNum, pageSize));
     }
 }

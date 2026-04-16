@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rightmanage.mapper.BankOrgMapper">
+
+  <select id="selectActiveAll" resultType="com.rightmanage.entity.BankOrg">
+    SELECT
+      orgcod AS id,
+      suporgcod AS parentId,
+      orgnam AS name,
+      orgcod AS code,
+      orglvl AS level,
+      dspsqn AS sort,
+      strdte,
+      enddte
+    FROM bmip_sys_ttlorginf
+    WHERE (strdte IS NULL OR strdte = '' OR strdte &lt;= #{today})
+      AND (enddte IS NULL OR enddte = '' OR enddte &gt;= #{today})
+    ORDER BY dspsqn ASC, orgcod ASC
+  </select>
+
+  <select id="selectSubOrgList" resultType="com.rightmanage.entity.BankOrg">
+    SELECT
+      orgcod AS id,
+      suporgcod AS parentId,
+      orgnam AS name,
+      orgcod AS code,
+      orglvl AS level,
+      dspsqn AS sort,
+      strdte,
+      enddte
+    FROM bmip_sys_ttlorginf
+    WHERE suporgcod = #{orgcod}
+      AND (strdte IS NULL OR strdte = '' OR strdte &lt;= #{today})
+      AND (enddte IS NULL OR enddte = '' OR enddte &gt;= #{today})
+    ORDER BY dspsqn ASC, orgcod ASC
+  </select>
+
+  <select id="selectOrgFlattenRow" resultType="map">
+    SELECT
+      orglev0,
+      orglev1,
+      orglev2,
+      orglev3,
+      orglev4,
+      orglev5,
+      orglev6,
+      orglev7
+    FROM ${tableName}
+    WHERE dte = #{dte}
+      AND orgcod = #{orgcod}
+    LIMIT 1
+  </select>
+
+  <select id="selectNextLevelOrgCodes" resultType="string">
+    SELECT DISTINCT suborgcod
+    FROM ${tableName}
+    WHERE dte = #{dte}
+      AND orgcod = #{orgcod}
+      AND orglev = '1'
+      AND suborgcod IS NOT NULL
+      AND suborgcod != ''
+  </select>
+
+  <select id="selectAllSubOrgCodes" resultType="string">
+    SELECT DISTINCT suborgcod
+    FROM ${tableName}
+    WHERE dte = #{dte}
+      AND orgcod = #{orgcod}
+      AND suborgcod IS NOT NULL
+      AND suborgcod != ''
+  </select>
+
+</mapper>

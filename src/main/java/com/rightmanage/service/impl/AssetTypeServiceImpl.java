@@ -21,7 +21,7 @@ public class AssetTypeServiceImpl implements AssetTypeService {
     public List<AssetType> listAll() {
         return assetTypeMapper.selectList(new LambdaQueryWrapper<AssetType>()
                 .orderByAsc(AssetType::getSort)
-                .orderByAsc(AssetType::getId));
+                .orderByAsc(AssetType::getTypeCode));
     }
 
     @Override
@@ -32,12 +32,12 @@ public class AssetTypeServiceImpl implements AssetTypeService {
         }
         return assetTypeMapper.selectList(wrapper
                 .orderByAsc(AssetType::getSort)
-                .orderByAsc(AssetType::getId));
+                .orderByAsc(AssetType::getTypeCode));
     }
 
     @Override
-    public AssetType getById(Long id) {
-        return assetTypeMapper.selectById(id);
+    public AssetType getByTypeCode(String typeCode) {
+        return assetTypeMapper.selectById(typeCode);
     }
 
     @Override
@@ -60,25 +60,25 @@ public class AssetTypeServiceImpl implements AssetTypeService {
 
     @Override
     @Transactional
-    public void delete(Long id) {
-        assetTypeMapper.deleteById(id);
+    public void delete(String typeCode) {
+        assetTypeMapper.deleteById(typeCode);
     }
 
     @Override
     @Transactional
-    public void updateStatus(Long id, Integer status) {
+    public void updateStatus(String typeCode, Integer status) {
         LambdaUpdateWrapper<AssetType> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AssetType::getId, id)
+        wrapper.eq(AssetType::getTypeCode, typeCode)
                 .set(AssetType::getStatus, status);
         assetTypeMapper.update(null, wrapper);
     }
 
     @Override
-    public boolean checkCodeUnique(String typeCode, Long excludeId) {
+    public boolean checkCodeUnique(String typeCode, String excludeTypeCode) {
         LambdaQueryWrapper<AssetType> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(AssetType::getTypeCode, typeCode);
-        if (excludeId != null) {
-            wrapper.ne(AssetType::getId, excludeId);
+        if (excludeTypeCode != null && !excludeTypeCode.isEmpty()) {
+            wrapper.ne(AssetType::getTypeCode, excludeTypeCode);
         }
         return assetTypeMapper.selectCount(wrapper) == 0;
     }

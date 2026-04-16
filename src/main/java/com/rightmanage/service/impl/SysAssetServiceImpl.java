@@ -37,12 +37,12 @@ public class SysAssetServiceImpl implements SysAssetService {
     }
 
     @Override
-    public List<SysAsset> listAvailableAssets(String moduleCode, Long typeId, Long tenantId, Long userId) {
+    public List<SysAsset> listAvailableAssets(String moduleCode, Long typeId, String tenantCode, Long userId) {
         LambdaQueryWrapper<SysAsset> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysAsset::getModuleCode, moduleCode)
                .eq(SysAsset::getStatus, 1)
                .eq(typeId != null, SysAsset::getTypeId, typeId)
-               .eq(tenantId != null, SysAsset::getTenantId, tenantId)
+               .eq(tenantCode != null, SysAsset::getTenantCode, tenantCode)
                .orderByAsc(SysAsset::getAssetCode);
 
         return sysAssetMapper.selectList(wrapper);
@@ -84,13 +84,13 @@ public class SysAssetServiceImpl implements SysAssetService {
 
     @Override
     public IPage<SysAsset> pageAllocatedAssets(Integer pageNum, Integer pageSize,
-            String moduleCode, Long typeId, Long tenantId) {
+            String moduleCode, Long typeId, String tenantCode) {
         Page<SysAsset> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<SysAsset> wrapper = new LambdaQueryWrapper<>();
         
         wrapper.eq(moduleCode != null, SysAsset::getModuleCode, moduleCode);
         wrapper.eq(typeId != null, SysAsset::getTypeId, typeId);
-        wrapper.eq(tenantId != null, SysAsset::getTenantId, tenantId);
+        wrapper.eq(tenantCode != null, SysAsset::getTenantCode, tenantCode);
         
         wrapper.orderByDesc(SysAsset::getCreateTime);
         return sysAssetMapper.selectPage(page, wrapper);

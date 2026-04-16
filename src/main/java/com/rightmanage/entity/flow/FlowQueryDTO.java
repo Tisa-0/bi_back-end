@@ -35,12 +35,7 @@ public class FlowQueryDTO {
     private String tenantCode;
 
     /**
-     * 流程定义ID（可选，与 flowCode 二选一）
-     */
-    private Long flowId;
-
-    /**
-     * 流程定义编码（可选，与 flowId 二选一，优先级高于 flowId）
+     * 流程定义编码（可选）
      */
     private String flowCode;
 
@@ -54,6 +49,17 @@ public class FlowQueryDTO {
      * 对应 FlowInstance.currentNodeKey 或 FlowTask.nodeKey
      */
     private String nodeKey;
+
+    /**
+     * 机构编码（可选，仅 pending 查询生效）
+     */
+    private String orgCode;
+
+    /**
+     * 机构范围（可选，仅 pending 查询生效）
+     * self=本级，next=下一级，all=下辖
+     */
+    private String orgScope;
 
     /**
      * 页码（默认1）

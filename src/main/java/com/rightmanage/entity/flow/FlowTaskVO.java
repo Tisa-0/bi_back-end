@@ -8,9 +8,9 @@ import java.util.Date;
  */
 @Data
 public class FlowTaskVO {
-    private Long id;
-    private Long instanceId;
-    private Long flowId;  // 流程定义ID（用于前端查询流程详情）
+    private String taskId;
+    private String instanceId;
+    private String flowCode;  // 流程定义编码（用于前端查询流程详情）
     private String flowName;
     private String instanceName;
     private String nodeKey;
@@ -27,9 +27,9 @@ public class FlowTaskVO {
     private Date createTime; // 任务创建时间（到达时间）
     private Integer status;
     private String executeLog; // 外部模块执行日志
-    private Long tenantId; // 多租户审批节点的任务归属租户ID
+    private String tenantCode; // 多租户审批节点的任务归属租户编码
     private String tenantName; // 多租户审批节点的任务归属租户名称
-    private Long sourceOrgId; // 发起机构ID（orgRelated节点有效）
+    private String sourceOrgId; // 发起机构ID（orgRelated节点有效）
     private String sourceOrgName; // 发起机构名称（前端展示用）
     private String assetTypeName; // 资产类型名称
     private String typeCode;       // 资产类型编码

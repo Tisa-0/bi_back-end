@@ -14,7 +14,7 @@ public interface SysAssetService {
     /**
      * 查询指定模块下的可用资产（未被当前用户绑定的）
      */
-    List<SysAsset> listAvailableAssets(String moduleCode, Long typeId, Long tenantId, Long userId);
+    List<SysAsset> listAvailableAssets(String moduleCode, Long typeId, String tenantCode, Long userId);
     
     /**
      * 根据ID查询资产
@@ -47,11 +47,11 @@ public interface SysAssetService {
      * @param pageSize    每页条数
      * @param moduleCode  模块编码
      * @param typeId      资产类型ID
-     * @param tenantId    租户ID（可为null）
+     * @param tenantCode  租户编码（可为null）
      * @return IPage<SysAsset>
      */
     IPage<SysAsset> pageAllocatedAssets(Integer pageNum, Integer pageSize,
-            String moduleCode, Long typeId, Long tenantId);
+            String moduleCode, Long typeId, String tenantCode);
 
     /**
      * 新增分配资产（按模块+资产类型，可指定租户）

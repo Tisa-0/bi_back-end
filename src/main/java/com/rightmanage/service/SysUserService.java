@@ -22,25 +22,25 @@ public interface SysUserService {
 
     boolean updateStatus(Long id, Integer status);
 
-    List<Long> getRoleIdsByUserId(Long userId);
+    List<String> getRoleIdsByUserId(Long userId);
 
-    List<Long> getRoleIdsByUserId(Long userId, String moduleCode, Long tenantId);
+    List<String> getRoleIdsByUserId(Long userId, String moduleCode, String tenantCode);
 
-    boolean bindRoles(Long userId, List<Long> roleIds, String moduleCode, Long tenantId);
+    boolean bindRoles(Long userId, List<String> roleCodes, String moduleCode, String tenantCode);
 
-    BankOrg getAuthorizedOrg(Long userId, String moduleCode, Long tenantId);
+    BankOrg getAuthorizedOrg(Long userId, String moduleCode, String tenantCode);
 
-    boolean bindAuthorizedOrg(Long userId, String moduleCode, Long tenantId, Long orgId);
+    boolean bindAuthorizedOrg(Long userId, String moduleCode, String tenantCode, String orgId);
 
     /**
      * 获取指定机构的所有祖先机构ID列表（从根到父，包含自身）
      */
-    List<Long> getAncestorOrgIds(Long orgId);
+    List<String> getAncestorOrgIds(String orgId);
 
     /**
      * 获取指定机构的所有后代机构ID列表（包含自身）
      */
-    List<Long> getDescendantOrgIds(Long orgId);
+    List<String> getDescendantOrgIds(String orgId);
 
     /**
      * 判断用户在指定模块/租户下，是否有权限审批机构相关任务
@@ -50,9 +50,9 @@ public interface SysUserService {
      *
      * @param userId      用户ID
      * @param moduleCode  模块编码
-     * @param tenantId    租户ID（可为null）
+     * @param tenantCode  租户编码（可为null）
      * @param sourceOrgId 发起机构ID（待审批任务的 sourceOrgId）
      * @return true=有权审批，false=无权审批
      */
-    boolean isUserAuthorizedForOrgLevel(Long userId, String moduleCode, Long tenantId, Long sourceOrgId);
+    boolean isUserAuthorizedForOrgLevel(Long userId, String moduleCode, String tenantCode, String sourceOrgId);
 }

@@ -14,12 +14,10 @@ import java.io.Serializable;
 public class FlowNodeConfig implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
+    @TableId(value = "node_id", type = IdType.INPUT)
+    private String nodeId;
 
-    private String uuid; // 前端生成的唯一标识（用于连线排序）
-
-    private Long flowId;
+    private String flowCode;
 
     private String nodeKey;
 

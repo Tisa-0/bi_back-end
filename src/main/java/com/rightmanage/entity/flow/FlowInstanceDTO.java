@@ -23,7 +23,7 @@ public class FlowInstanceDTO implements Serializable {
     private String currentHandlerIds;
     private String currentHandlerNames;
     private String variables;
-    private Long tenantId;
+    private String tenantCode;
     private String createTime;
     private String updateTime;
     private String endTime;

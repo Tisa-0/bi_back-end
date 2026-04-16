@@ -1,7 +1,7 @@
 package com.rightmanage.controller.flow;
 
 import com.rightmanage.common.Result;
-import com.rightmanage.entity.FlowCcRecord;
+import com.rightmanage.entity.flow.FlowCcRecord;
 import com.rightmanage.mapper.flow.FlowCcRecordMapper;
 import com.rightmanage.service.SysUserService;
 import com.rightmanage.entity.SysUser;

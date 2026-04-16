@@ -7,7 +7,7 @@ import lombok.Data;
  */
 @Data
 public class FlowApproveDTO {
-    private Long taskId;
+    private String taskId;
     private String action;
     private String comment;
     private Long userId;

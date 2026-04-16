@@ -13,10 +13,10 @@ import java.util.Date;
 public class FlowTask implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
+    @TableId(value = "task_id", type = IdType.INPUT)
+    private String taskId;
 
-    private Long instanceId;
+    private String instanceId;
 
     private String nodeKey;
 
@@ -59,8 +59,9 @@ public class FlowTask implements Serializable {
     private String customFieldValues;
 
     // 该任务的租户ID（多租户审批节点有效，标记该任务属于哪个租户）
-    private Long tenantId;
+    @TableField("tenant_code")
+    private String tenantCode;
 
     // 发起机构ID（orgRelated 节点有效，记录发起流程时选择的机构）
-    private Long sourceOrgId;
+    private String sourceOrgId;
 }

@@ -1,4 +1,4 @@
-package com.rightmanage.entity;
+package com.rightmanage.entity.flow;
 
 import lombok.Data;
 import java.io.Serializable;
@@ -26,7 +26,7 @@ public class FlowDefinitionDTO implements Serializable {
     private String formConfig;
     private Long creatorId;
     private String creatorName;
-    private Long tenantId;
+    private String tenantCode;
     
     // 节点列表（解析nodesJson获得）
     private List<FlowNodeDTO> nodes;

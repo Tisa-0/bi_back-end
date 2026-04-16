@@ -3,9 +3,7 @@ package com.rightmanage.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.rightmanage.common.Result;
 import com.rightmanage.entity.SysAsset;
-import com.rightmanage.entity.SysTenant;
 import com.rightmanage.service.SysAssetService;
-import com.rightmanage.service.SysTenantService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,9 +15,6 @@ public class SysAssetController {
 
     @Autowired
     private SysAssetService sysAssetService;
-
-    @Autowired
-    private SysTenantService sysTenantService;
 
     /**
      * 分页查询资产列表
@@ -42,8 +37,7 @@ public class SysAssetController {
             @RequestParam(required = false) Long typeId,
             @RequestParam(required = false) String tenantCode,
             @RequestParam(required = false) Long userId) {
-        Long tenantId = resolveTenantId(tenantCode);
-        return Result.success(sysAssetService.listAvailableAssets(moduleCode, typeId, tenantId, userId));
+        return Result.success(sysAssetService.listAvailableAssets(moduleCode, typeId, tenantCode, userId));
     }
 
     /**
@@ -89,17 +83,17 @@ public class SysAssetController {
 
     /**
      * 分页查询指定模块+资产类型下已分配的资产
-     * GET /asset/allocated/page?moduleCode=&typeId=&tenantId=&pageNum=1&pageSize=10
+     * GET /asset/allocated/page?moduleCode=&typeId=&tenantCode=&pageNum=1&pageSize=10
      */
     @GetMapping("/allocated/page")
     public Result<IPage<SysAsset>> pageAllocatedAssets(
             @RequestParam(required = false) String moduleCode,
             @RequestParam(required = false) Long typeId,
-            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String tenantCode,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
         return Result.success(sysAssetService.pageAllocatedAssets(
-                pageNum, pageSize, moduleCode, typeId, tenantId));
+                pageNum, pageSize, moduleCode, typeId, tenantCode));
     }
 
     /**
@@ -123,13 +117,5 @@ public class SysAssetController {
     public Result<?> deleteAllocated(@PathVariable Long id) {
         sysAssetService.deleteAllocatedAsset(id);
         return Result.success();
-    }
-
-    private Long resolveTenantId(String tenantCode) {
-        if (tenantCode == null || tenantCode.trim().isEmpty()) {
-            return null;
-        }
-        SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-        return tenant != null ? tenant.getId() : null;
     }
 }

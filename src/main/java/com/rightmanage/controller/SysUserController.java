@@ -3,9 +3,7 @@ package com.rightmanage.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.rightmanage.common.Result;
 import com.rightmanage.entity.BankOrg;
-import com.rightmanage.entity.SysTenant;
 import com.rightmanage.entity.SysUser;
-import com.rightmanage.service.SysTenantService;
 import com.rightmanage.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -17,9 +15,6 @@ import java.util.stream.Collectors;
 public class SysUserController {
     @Autowired
     private SysUserService sysUserService;
-
-    @Autowired
-    private SysTenantService sysTenantService;
 
     @GetMapping("/list")
     public Result<List<SysUser>> list() {
@@ -57,42 +52,23 @@ public class SysUserController {
         return Result.success();
     }
     @GetMapping("/{id}/roles")
-    public Result<List<Long>> getUserRoles(
+    public Result<List<String>> getUserRoles(
             @PathVariable Long id,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId,
             @RequestParam(required = false) String tenantCode) {
-        // 如果传了tenantCode，先查询tenantId
-        if (tenantCode != null && !tenantCode.isEmpty()) {
-            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-            if (tenant != null) {
-                tenantId = tenant.getId();
-            }
-        }
-        if (moduleCode != null || tenantId != null) {
-            return Result.success(sysUserService.getRoleIdsByUserId(id, moduleCode, tenantId));
+        if (moduleCode != null || tenantCode != null) {
+            return Result.success(sysUserService.getRoleIdsByUserId(id, moduleCode, tenantCode));
         }
         return Result.success(sysUserService.getRoleIdsByUserId(id));
     }
 
     @PostMapping("/{id}/roles")
     public Result<?> bindRoles(@PathVariable Long id, @RequestBody Map<String, Object> params) {
-        List<?> roleIdsObj = (List<?>) params.get("roleIds");
-        List<Long> roleIds = roleIdsObj.stream().map(item -> ((Number) item).longValue()).collect(Collectors.toList());
+        @SuppressWarnings("unchecked")
+        List<String> roleCodes = (List<String>) params.get("roleCodes");
         String moduleCode = (String) params.get("moduleCode");
-        Object tenantIdObj = params.get("tenantId");
-        Long tenantId = tenantIdObj != null ? ((Number) tenantIdObj).longValue() : null;
-        
-        // 如果传了tenantCode，先查询tenantId
         String tenantCode = (String) params.get("tenantCode");
-        if (tenantCode != null && !tenantCode.isEmpty() && tenantId == null) {
-            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-            if (tenant != null) {
-                tenantId = tenant.getId();
-            }
-        }
-        
-        sysUserService.bindRoles(id, roleIds, moduleCode, tenantId);
+        sysUserService.bindRoles(id, roleCodes, moduleCode, tenantCode);
         return Result.success();
     }
 
@@ -100,38 +76,22 @@ public class SysUserController {
     public Result<BankOrg> getUserOrgAuth(
             @PathVariable Long id,
             @RequestParam String moduleCode,
-            @RequestParam(required = false) Long tenantId,
             @RequestParam(required = false) String tenantCode) {
-        if (tenantCode != null && !tenantCode.isEmpty() && tenantId == null) {
-            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-            if (tenant != null) {
-                tenantId = tenant.getId();
-            }
-        }
-        return Result.success(sysUserService.getAuthorizedOrg(id, moduleCode, tenantId));
+        return Result.success(sysUserService.getAuthorizedOrg(id, moduleCode, tenantCode));
     }
 
     @PostMapping("/{id}/org-auth")
     public Result<?> bindUserOrgAuth(@PathVariable Long id, @RequestBody Map<String, Object> params) {
         String moduleCode = (String) params.get("moduleCode");
-        Object tenantIdObj = params.get("tenantId");
-        Long tenantId = tenantIdObj != null ? ((Number) tenantIdObj).longValue() : null;
         String tenantCode = (String) params.get("tenantCode");
         Object orgIdObj = params.get("orgId");
-        Long orgId = orgIdObj != null ? ((Number) orgIdObj).longValue() : null;
+        String orgId = orgIdObj == null ? null : String.valueOf(orgIdObj);
 
-        if ((moduleCode == null || moduleCode.isEmpty()) || orgId == null) {
+        if ((moduleCode == null || moduleCode.isEmpty()) || orgId == null || orgId.trim().isEmpty()) {
             return Result.error("moduleCode和orgId不能为空");
         }
 
-        if (tenantCode != null && !tenantCode.isEmpty() && tenantId == null) {
-            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-            if (tenant != null) {
-                tenantId = tenant.getId();
-            }
-        }
-
-        sysUserService.bindAuthorizedOrg(id, moduleCode, tenantId, orgId);
+        sysUserService.bindAuthorizedOrg(id, moduleCode, tenantCode, orgId);
         return Result.success();
     }
 }

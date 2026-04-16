@@ -32,33 +32,41 @@ public class BankOrgController {
     /**
      * 获取机构完整路径（总行 -> ... -> 当前机构）
      */
-    @GetMapping("/path/{id}")
-    public Result<List<BankOrg>> getPath(@PathVariable Long id) {
-        return Result.success(bankOrgService.getPath(id));
+    @GetMapping("/path/{orgcod}")
+    public Result<List<BankOrg>> getPath(@PathVariable String orgcod) {
+        return Result.success(bankOrgService.getPath(orgcod));
     }
 
     /**
      * 获取父机构
      */
-    @GetMapping("/parent/{id}")
-    public Result<BankOrg> getParent(@PathVariable Long id) {
-        return Result.success(bankOrgService.getParent(id));
+    @GetMapping("/parent/{orgcod}")
+    public Result<BankOrg> getParent(@PathVariable String orgcod) {
+        return Result.success(bankOrgService.getParent(orgcod));
     }
 
     /**
      * 获取直接子机构
      */
-    @GetMapping("/children/{id}")
-    public Result<List<BankOrg>> getChildren(@PathVariable Long id) {
-        return Result.success(bankOrgService.getChildren(id));
+    @GetMapping("/children/{orgcod}")
+    public Result<List<BankOrg>> getChildren(@PathVariable String orgcod) {
+        return Result.success(bankOrgService.getChildren(orgcod));
     }
 
     /**
      * 获取所有后代机构
      */
-    @GetMapping("/descendants/{id}")
-    public Result<List<BankOrg>> getDescendants(@PathVariable Long id) {
-        return Result.success(bankOrgService.getDescendants(id));
+    @GetMapping("/descendants/{orgcod}")
+    public Result<List<BankOrg>> getDescendants(@PathVariable String orgcod) {
+        return Result.success(bankOrgService.getDescendants(orgcod));
+    }
+
+    /**
+     * 按层级懒加载：查询指定机构下直接子机构
+     */
+    @GetMapping("/getsuborglist/{orgcod}")
+    public Result<List<BankOrg>> getSubOrgList(@PathVariable String orgcod) {
+        return Result.success(bankOrgService.getSubOrgList(orgcod));
     }
 
     /**
@@ -72,14 +80,14 @@ public class BankOrgController {
     /**
      * 聚合查询（一次返回树/路径/父/子）
      */
-    @GetMapping("/overview/{id}")
-    public Result<Map<String, Object>> overview(@PathVariable Long id) {
+    @GetMapping("/overview/{orgcod}")
+    public Result<Map<String, Object>> overview(@PathVariable String orgcod) {
         Map<String, Object> result = new HashMap<>();
         result.put("tree", bankOrgService.getTree());
-        result.put("path", bankOrgService.getPath(id));
-        result.put("parent", bankOrgService.getParent(id));
-        result.put("children", bankOrgService.getChildren(id));
-        result.put("descendants", bankOrgService.getDescendants(id));
+        result.put("path", bankOrgService.getPath(orgcod));
+        result.put("parent", bankOrgService.getParent(orgcod));
+        result.put("children", bankOrgService.getChildren(orgcod));
+        result.put("descendants", bankOrgService.getDescendants(orgcod));
         return Result.success(result);
     }
 }

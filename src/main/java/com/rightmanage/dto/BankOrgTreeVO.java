@@ -12,8 +12,8 @@ import java.util.List;
 public class BankOrgTreeVO implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private Long id;
-    private Long parentId;
+    private String id;
+    private String parentId;
     private String name;
     private String code;
     private Integer level;

@@ -12,7 +12,7 @@ public class FlowNodeConfigDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String nodeKey;   // 节点唯一标识
-    private String nodeId;   // 节点uuid
+    private String nodeId;   // 节点ID
     private String nodeName;  // 节点名称
     private String handlerType; // 处理人类型：user/role/dynamic/role_dynamic_user
 
@@ -23,8 +23,8 @@ public class FlowNodeConfigDTO implements Serializable {
     private String handlerName; // dynamic/role_dynamic_user 节点：用户姓名
 
     // 多租户审批节点：允许审批的租户ID（仅handlerType=role且模块为多租户时有效，单选）
-    private Long tenantId;
+    private String tenantCode;
 
     // 机构相关审批：发起机构ID（orgRelated=1的role节点，发起流程时由用户选择）
-    private Long sourceOrgId;
+    private String sourceOrgId;
 }

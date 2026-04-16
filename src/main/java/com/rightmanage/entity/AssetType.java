@@ -19,7 +19,10 @@ import java.util.Date;
 public class AssetType implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
+    /**
+     * 历史字段，数据库已不再存在，仅为兼容少量旧代码保留，不参与SQL映射
+     */
+    @TableField(exist = false)
     private Long id;
 
     /**
@@ -30,6 +33,7 @@ public class AssetType implements Serializable {
     /**
      * 资产类型编码（全局唯一）
      */
+    @TableId(value = "type_code", type = IdType.INPUT)
     private String typeCode;
 
     /**

@@ -1,4 +1,4 @@
-package com.rightmanage.entity;
+package com.rightmanage.entity.flow;
 
 import lombok.Data;
 import java.io.Serializable;

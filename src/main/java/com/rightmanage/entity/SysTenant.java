@@ -1,26 +1,30 @@
 package com.rightmanage.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import java.io.Serializable;
-import java.util.Date;
 
 @Data
+@TableName("bmip_tenant_management")
 public class SysTenant implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
-    private String tenantName;
-
+    @TableId(value = "tenant_code")
     private String tenantCode;
 
-    private Integer status;
-
-    @TableField(fill = FieldFill.INSERT)
-    private Date createTime;
-
-    @TableField(fill = FieldFill.INSERT_UPDATE)
-    private Date updateTime;
+    private String tenantName;
+    private String orgCode;
+    private String tenantAddress;
+    private String commonTenantFlag;
+    private Integer displayOrder;
+    private String dataLakeUser;
+    private String orgType;
+    private String reportGrayReleaseSwitch;
+    private String tenantIdxPrefix;
+    private String tenantEnableSwitch;
+    private String tenantSchema;
+    private String tenantProject;
+    private String tenantModelPrefix;
+    private String tenantTablePrefix;
 }

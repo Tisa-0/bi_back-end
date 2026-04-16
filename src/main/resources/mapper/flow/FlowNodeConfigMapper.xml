@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rightmanage.mapper.flow.FlowNodeConfigMapper">
+
+  <select id="selectByFlowCode" resultType="com.rightmanage.entity.flow.FlowNodeConfig">
+    SELECT * FROM flow_node_config
+    WHERE flow_code = #{flowCode}
+    ORDER BY sort ASC
+  </select>
+
+</mapper>

@@ -20,9 +20,9 @@ public interface AssetTypeService {
     List<AssetType> listByModuleCode(String moduleCode);
 
     /**
-     * 根据ID查询详情
+     * 根据编码查询详情
      */
-    AssetType getById(Long id);
+    AssetType getByTypeCode(String typeCode);
 
     /**
      * 新增
@@ -37,15 +37,15 @@ public interface AssetTypeService {
     /**
      * 删除（逻辑删除）
      */
-    void delete(Long id);
+    void delete(String typeCode);
 
     /**
      * 切换状态
      */
-    void updateStatus(Long id, Integer status);
+    void updateStatus(String typeCode, Integer status);
 
     /**
      * 检查编码是否已存在（排除自身）
      */
-    boolean checkCodeUnique(String typeCode, Long excludeId);
+    boolean checkCodeUnique(String typeCode, String excludeTypeCode);
 }

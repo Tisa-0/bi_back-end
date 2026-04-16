@@ -15,6 +15,6 @@ public class RoleDTO implements Serializable {
     private String roleCode;
     private String description;
     private String moduleCode;
-    private Long tenantId;
+    private String tenantCode;
     private String createTime;
 }

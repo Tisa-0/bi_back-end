@@ -9,41 +9,41 @@ import java.util.List;
 
 public interface SysRoleService {
 
-    IPage<SysRole> pageByModuleCode(Integer pageNum, Integer pageSize, String moduleCode, Long tenantId);
+    IPage<SysRole> pageByModuleCode(Integer pageNum, Integer pageSize, String moduleCode, String tenantCode);
 
     List<SysRole> listByModuleCode(String moduleCode);
 
-    List<SysRole> listByModuleCodeAndTenantId(String moduleCode, Long tenantId);
+    List<SysRole> listByModuleCodeAndTenantCode(String moduleCode, String tenantCode);
 
-    SysRole getById(Long id);
+    SysRole getById(String roleCode);
 
     boolean save(SysRole role);
 
     boolean updateById(SysRole role);
 
-    boolean deleteById(Long id);
+    boolean deleteById(String roleCode);
 
-    List<SysRole> listByIds(List<Long> ids);
+    List<SysRole> listByIds(List<String> roleCodes);
 
-    List<Long> getMenuIdsByRoleId(Long roleId, String moduleCode, Long tenantId);
+    List<String> getMenuIdsByRoleId(String roleCode, String moduleCode, String tenantCode);
 
-    boolean bindMenus(Long roleId, List<Long> menuIds, String moduleCode, Long tenantId);
+    boolean bindMenus(String roleCode, List<String> menuIds, String moduleCode, String tenantCode);
 
-    List<Long> getApiIdsByRoleId(Long roleId, String moduleCode);
+    List<Long> getApiIdsByRoleId(String roleCode, String moduleCode);
 
-    boolean bindApis(Long roleId, List<Long> apiIds, String moduleCode);
+    boolean bindApis(String roleCode, List<Long> apiIds, String moduleCode);
 
-    List<Long> getUserIdsByRoleId(Long roleId, String moduleCode, Long tenantId);
+    List<Long> getUserIdsByRoleId(String roleCode, String moduleCode, String tenantCode);
 
-    boolean bindUsers(Long roleId, List<Long> userIds, String moduleCode, Long tenantId);
+    boolean bindUsers(String roleCode, List<Long> userIds, String moduleCode, String tenantCode);
 
-    List<SysUser> getRoleUsers(Long roleId, String moduleCode, Long tenantId);
+    List<SysUser> getRoleUsers(String roleCode, String moduleCode, String tenantCode);
 
-    List<SysUser> getOptionalUsers(Long roleId, String keyword, Integer status, Integer pageNum, Integer pageSize, Long tenantId);
+    List<SysUser> getOptionalUsers(String roleCode, String keyword, Integer status, Integer pageNum, Integer pageSize, String tenantCode);
 
-    BindResultVO bindUsersBatch(Long roleId, List<Long> userIds, String moduleCode, Long tenantId);
+    BindResultVO bindUsersBatch(String roleCode, List<Long> userIds, String moduleCode, String tenantCode);
 
-    BindResultVO unbindUsers(Long roleId, List<Long> userIds, String moduleCode, Long tenantId);
+    BindResultVO unbindUsers(String roleCode, List<Long> userIds, String moduleCode, String tenantCode);
 
-    boolean clearRoleUsers(Long roleId, String moduleCode, Long tenantId);
+    boolean clearRoleUsers(String roleCode, String moduleCode, String tenantCode);
 }

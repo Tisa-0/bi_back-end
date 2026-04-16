@@ -2,9 +2,7 @@ package com.rightmanage.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.rightmanage.common.Result;
-import com.rightmanage.entity.SysTenant;
 import com.rightmanage.entity.SysUserAsset;
-import com.rightmanage.service.SysTenantService;
 import com.rightmanage.service.SysUserAssetService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -18,9 +16,6 @@ public class SysUserAssetController {
     @Autowired
     private SysUserAssetService sysUserAssetService;
 
-    @Autowired
-    private SysTenantService sysTenantService;
-
     /**
      * 分页查询用户资产列表（支持按资产类型+租户过滤）
      */
@@ -32,8 +27,7 @@ public class SysUserAssetController {
             @RequestParam String moduleCode,
             @RequestParam(required = false) Long typeId,
             @RequestParam(required = false) String tenantCode) {
-        Long tenantId = resolveTenantId(tenantCode);
-        return Result.success(sysUserAssetService.page(pageNum, pageSize, userId, moduleCode, typeId, tenantId));
+        return Result.success(sysUserAssetService.page(pageNum, pageSize, userId, moduleCode, typeId, tenantCode));
     }
 
     /**
@@ -45,8 +39,7 @@ public class SysUserAssetController {
             @RequestParam(required = false) String moduleCode,
             @RequestParam(required = false) Long typeId,
             @RequestParam(required = false) String tenantCode) {
-        Long tenantId = resolveTenantId(tenantCode);
-        return Result.success(sysUserAssetService.list(userId, moduleCode, typeId, tenantId));
+        return Result.success(sysUserAssetService.list(userId, moduleCode, typeId, tenantCode));
     }
 
     /**
@@ -58,8 +51,7 @@ public class SysUserAssetController {
             @RequestParam String moduleCode,
             @RequestParam(required = false) Long typeId,
             @RequestParam(required = false) String tenantCode) {
-        Long tenantId = resolveTenantId(tenantCode);
-        return Result.success(sysUserAssetService.getBoundAssetIds(userId, moduleCode, typeId, tenantId));
+        return Result.success(sysUserAssetService.getBoundAssetIds(userId, moduleCode, typeId, tenantCode));
     }
 
     /**
@@ -95,11 +87,10 @@ public class SysUserAssetController {
             typeId = typeIdObj instanceof Number ? ((Number) typeIdObj).longValue() : Long.valueOf(typeIdObj.toString());
         }
 
-        // 解析 tenantCode -> tenantId
+        // 解析 tenantCode
         String tenantCode = params.get("tenantCode") != null ? params.get("tenantCode").toString() : null;
-        Long tenantId = resolveTenantId(tenantCode);
 
-        sysUserAssetService.bindAssets(userId, assetIds, moduleCode, typeId, tenantId);
+        sysUserAssetService.bindAssets(userId, assetIds, moduleCode, typeId, tenantCode);
         return Result.success();
     }
 
@@ -121,16 +112,5 @@ public class SysUserAssetController {
             @RequestParam String moduleCode) {
         sysUserAssetService.unbindAllAssets(userId, moduleCode);
         return Result.success();
-    }
-
-    /**
-     * 将 tenantCode 解析为 tenantId（Long）
-     */
-    private Long resolveTenantId(String tenantCode) {
-        if (tenantCode == null || tenantCode.trim().isEmpty()) {
-            return null;
-        }
-        SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-        return tenant != null ? tenant.getId() : null;
     }
 }

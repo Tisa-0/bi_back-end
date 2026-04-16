@@ -1,6 +1,9 @@
 package com.rightmanage.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
 import lombok.Data;
 import java.io.Serializable;
 import java.util.Date;
@@ -9,9 +12,7 @@ import java.util.Date;
 public class SysModule implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
+    @TableId(value = "module_code", type = IdType.INPUT)
     private String moduleCode;
 
     private String moduleName;

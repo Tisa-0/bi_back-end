@@ -9,13 +9,14 @@ import java.util.List;
  */
 @Data
 public class FlowDetailVO {
-    private Long instanceId;
+    private String instanceId;
     private String flowName;
     private String instanceName;
     private String applicantName;
     private String statusName;
     private Date createTime;
     private List<FlowNodeDetailVO> nodeList;
+    private List<FlowLineDetailVO> lineList;
     private List<FlowOperationLog> logList;
     
     // 凭证信息

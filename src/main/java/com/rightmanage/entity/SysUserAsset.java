@@ -21,8 +21,9 @@ public class SysUserAsset implements Serializable {
     /** 关联资产类型ID（冗余存储，方便按类型过滤） */
     private Long typeId;
 
-    /** 所属租户ID（冗余存储，方便按租户隔离查询） */
-    private Long tenantId;
+    /** 所属租户编码（冗余存储，方便按租户隔离查询） */
+    @TableField("tenant_code")
+    private String tenantCode;
 
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;

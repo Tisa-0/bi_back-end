@@ -20,21 +20,15 @@ public class SysTenantServiceImpl implements SysTenantService {
     @Override
     public List<SysTenant> listByModuleCode(String moduleCode) {
         LambdaQueryWrapper<SysTenant> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SysTenant::getStatus, 1);
-        wrapper.orderByAsc(SysTenant::getId);
+        wrapper.eq(SysTenant::getTenantEnableSwitch, "1")
+                .orderByAsc(SysTenant::getDisplayOrder)
+                .orderByAsc(SysTenant::getTenantCode);
         return sysTenantMapper.selectList(wrapper);
     }
 
     @Override
-    public SysTenant getById(Long id) {
-        return sysTenantMapper.selectById(id);
-    }
-
-    @Override
     public SysTenant getByTenantCode(String tenantCode) {
-        LambdaQueryWrapper<SysTenant> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SysTenant::getTenantCode, tenantCode);
-        return sysTenantMapper.selectOne(wrapper);
+        return sysTenantMapper.selectById(tenantCode);
     }
 
     @Override
@@ -43,13 +37,13 @@ public class SysTenantServiceImpl implements SysTenantService {
     }
 
     @Override
-    public boolean updateById(SysTenant tenant) {
+    public boolean updateByTenantCode(SysTenant tenant) {
         return sysTenantMapper.updateById(tenant) > 0;
     }
 
     @Override
-    public boolean deleteById(Long id) {
-        return sysTenantMapper.deleteById(id) > 0;
+    public boolean deleteByTenantCode(String tenantCode) {
+        return sysTenantMapper.deleteById(tenantCode) > 0;
     }
 
     @Override
@@ -59,7 +53,8 @@ public class SysTenantServiceImpl implements SysTenantService {
         if (tenantName != null && !tenantName.isEmpty()) {
             wrapper.like(SysTenant::getTenantName, tenantName);
         }
-        wrapper.orderByDesc(SysTenant::getId);
+        wrapper.orderByAsc(SysTenant::getDisplayOrder)
+                .orderByAsc(SysTenant::getTenantCode);
         return sysTenantMapper.selectPage(page, wrapper);
     }
 }

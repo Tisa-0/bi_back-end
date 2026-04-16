@@ -13,7 +13,7 @@ public class DynamicHandlerDTO {
     private String nodeKey; // 节点key
     private Long handlerId; // 处理人ID（dynamic/role_dynamic_user 选中的用户ID）
     private String handlerName; // 处理人名称
-    private Long tenantId; // 节点专属的允许审批租户ID（非多租户节点为 null，单选）
-    private Long sourceOrgId; // 发起机构ID（orgRelated 节点有效）
+    private String tenantCode; // 节点专属的允许审批租户编码（非多租户节点为 null，单选）
+    private String sourceOrgId; // 发起机构ID（orgRelated 节点有效）
     private String moduleCode; // role_dynamic_user 节点：审批人模块编码（用于查询候选用户列表）
 }

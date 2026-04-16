@@ -22,8 +22,8 @@ public class SysRoleController {
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId) {
-        return Result.success(sysRoleService.pageByModuleCode(pageNum, pageSize, moduleCode, tenantId));
+            @RequestParam(required = false) String tenantCode) {
+        return Result.success(sysRoleService.pageByModuleCode(pageNum, pageSize, moduleCode, tenantCode));
     }
 
     @GetMapping("/list")
@@ -31,9 +31,9 @@ public class SysRoleController {
         return Result.success(sysRoleService.listByModuleCode(moduleCode));
     }
 
-    @GetMapping("/{id}")
-    public Result<SysRole> getById(@PathVariable Long id) {
-        return Result.success(sysRoleService.getById(id));
+    @GetMapping("/{roleCode}")
+    public Result<SysRole> getById(@PathVariable String roleCode) {
+        return Result.success(sysRoleService.getById(roleCode));
     }
 
     @PostMapping
@@ -48,9 +48,9 @@ public class SysRoleController {
         return Result.success();
     }
 
-    @DeleteMapping("/{id}")
-    public Result<?> delete(@PathVariable Long id) {
-        sysRoleService.deleteById(id);
+    @DeleteMapping("/{roleCode}")
+    public Result<?> delete(@PathVariable String roleCode) {
+        sysRoleService.deleteById(roleCode);
         return Result.success();
     }
 
@@ -60,11 +60,11 @@ public class SysRoleController {
      * 获取角色的菜单ID列表
      */
     @GetMapping("/{roleId}/menus")
-    public Result<List<Long>> getRoleMenus(
-            @PathVariable Long roleId,
+    public Result<List<String>> getRoleMenus(
+            @PathVariable String roleId,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId) {
-        return Result.success(sysRoleService.getMenuIdsByRoleId(roleId, moduleCode, tenantId));
+            @RequestParam(required = false) String tenantCode) {
+        return Result.success(sysRoleService.getMenuIdsByRoleId(roleId, moduleCode, tenantCode));
     }
 
     /**
@@ -72,16 +72,15 @@ public class SysRoleController {
      */
     @PostMapping("/{roleId}/menus")
     public Result<?> bindMenus(
-            @PathVariable Long roleId,
+            @PathVariable String roleId,
             @RequestBody java.util.Map<String, Object> params) {
         @SuppressWarnings("unchecked")
-        List<Number> menuIdNumbers = (List<Number>) params.get("menuIds");
-        List<Long> menuIds = menuIdNumbers != null ? menuIdNumbers.stream()
-            .map(Number::longValue).collect(java.util.stream.Collectors.toList()) : null;
+        List<Object> menuIdObjects = (List<Object>) params.get("menuIds");
+        List<String> menuIds = menuIdObjects != null ? menuIdObjects.stream()
+            .map(String::valueOf).collect(java.util.stream.Collectors.toList()) : null;
         String moduleCode = (String) params.get("moduleCode");
-        Number tenantIdNum = (Number) params.get("tenantId");
-        Long tenantId = tenantIdNum != null ? tenantIdNum.longValue() : null;
-        sysRoleService.bindMenus(roleId, menuIds, moduleCode, tenantId);
+        String tenantCode = (String) params.get("tenantCode");
+        sysRoleService.bindMenus(roleId, menuIds, moduleCode, tenantCode);
         return Result.success();
     }
 
@@ -92,7 +91,7 @@ public class SysRoleController {
      */
     @GetMapping("/{roleId}/apis")
     public Result<List<Long>> getRoleApis(
-            @PathVariable Long roleId,
+            @PathVariable String roleId,
             @RequestParam(required = false) String moduleCode) {
         return Result.success(sysRoleService.getApiIdsByRoleId(roleId, moduleCode));
     }
@@ -102,7 +101,7 @@ public class SysRoleController {
      */
     @PostMapping("/{roleId}/apis")
     public Result<?> bindApis(
-            @PathVariable Long roleId,
+            @PathVariable String roleId,
             @RequestBody java.util.Map<String, Object> params) {
         @SuppressWarnings("unchecked")
         List<Number> apiIdNumbers = (List<Number>) params.get("apiIds");
@@ -120,10 +119,10 @@ public class SysRoleController {
      */
     @GetMapping("/user/list/{roleId}")
     public Result<List<SysUser>> getRoleUsers(
-            @PathVariable Long roleId,
+            @PathVariable String roleId,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId) {
-        return Result.success(sysRoleService.getRoleUsers(roleId, moduleCode, tenantId));
+            @RequestParam(required = false) String tenantCode) {
+        return Result.success(sysRoleService.getRoleUsers(roleId, moduleCode, tenantCode));
     }
 
     /**
@@ -131,13 +130,13 @@ public class SysRoleController {
      */
     @GetMapping("/user/optional/{roleId}")
     public Result<List<SysUser>> getOptionalUsers(
-            @PathVariable Long roleId,
+            @PathVariable String roleId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer status,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
-            @RequestParam(required = false) Long tenantId) {
-        return Result.success(sysRoleService.getOptionalUsers(roleId, keyword, status, pageNum, pageSize, tenantId));
+            @RequestParam(required = false) String tenantCode) {
+        return Result.success(sysRoleService.getOptionalUsers(roleId, keyword, status, pageNum, pageSize, tenantCode));
     }
 
     /**
@@ -145,15 +144,14 @@ public class SysRoleController {
      */
     @PostMapping("/user/bind")
     public Result<?> bindUsersBatch(@RequestBody java.util.Map<String, Object> params) {
-        Long roleId = ((Number) params.get("roleId")).longValue();
+        String roleId = (String) params.get("roleCode");
         @SuppressWarnings("unchecked")
         List<Number> userIdNumbers = (List<Number>) params.get("userIds");
         List<Long> userIds = userIdNumbers != null ? userIdNumbers.stream()
             .map(Number::longValue).collect(java.util.stream.Collectors.toList()) : null;
         String moduleCode = (String) params.get("moduleCode");
-        Number tenantIdNum = (Number) params.get("tenantId");
-        Long tenantId = tenantIdNum != null ? tenantIdNum.longValue() : null;
-        return Result.success(sysRoleService.bindUsersBatch(roleId, userIds, moduleCode, tenantId));
+        String tenantCode = (String) params.get("tenantCode");
+        return Result.success(sysRoleService.bindUsersBatch(roleId, userIds, moduleCode, tenantCode));
     }
 
     /**
@@ -161,15 +159,14 @@ public class SysRoleController {
      */
     @PostMapping("/user/unbind")
     public Result<?> unbindUsers(@RequestBody java.util.Map<String, Object> params) {
-        Long roleId = ((Number) params.get("roleId")).longValue();
+        String roleId = (String) params.get("roleCode");
         @SuppressWarnings("unchecked")
         List<Number> userIdNumbers = (List<Number>) params.get("userIds");
         List<Long> userIds = userIdNumbers != null ? userIdNumbers.stream()
             .map(Number::longValue).collect(java.util.stream.Collectors.toList()) : null;
         String moduleCode = (String) params.get("moduleCode");
-        Number tenantIdNum = (Number) params.get("tenantId");
-        Long tenantId = tenantIdNum != null ? tenantIdNum.longValue() : null;
-        return Result.success(sysRoleService.unbindUsers(roleId, userIds, moduleCode, tenantId));
+        String tenantCode = (String) params.get("tenantCode");
+        return Result.success(sysRoleService.unbindUsers(roleId, userIds, moduleCode, tenantCode));
     }
 
     /**
@@ -177,10 +174,10 @@ public class SysRoleController {
      */
     @DeleteMapping("/{roleId}/users/clear")
     public Result<?> clearRoleUsers(
-            @PathVariable Long roleId,
+            @PathVariable String roleId,
             @RequestParam(required = false) String moduleCode,
-            @RequestParam(required = false) Long tenantId) {
-        sysRoleService.clearRoleUsers(roleId, moduleCode, tenantId);
+            @RequestParam(required = false) String tenantCode) {
+        sysRoleService.clearRoleUsers(roleId, moduleCode, tenantCode);
         return Result.success();
     }
 }

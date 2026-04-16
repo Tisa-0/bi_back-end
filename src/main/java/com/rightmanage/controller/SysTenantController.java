@@ -30,9 +30,9 @@ public class SysTenantController {
         return Result.success(sysTenantService.page(moduleCode, tenantName, pageNum, pageSize));
     }
 
-    @GetMapping("/{id}")
-    public Result<SysTenant> getById(@PathVariable Long id) {
-        return Result.success(sysTenantService.getById(id));
+    @GetMapping("/{tenantCode}")
+    public Result<SysTenant> getByTenantCode(@PathVariable String tenantCode) {
+        return Result.success(sysTenantService.getByTenantCode(tenantCode));
     }
 
     @PostMapping
@@ -42,11 +42,11 @@ public class SysTenantController {
 
     @PutMapping
     public Result<?> update(@RequestBody SysTenant tenant) {
-        return Result.success(sysTenantService.updateById(tenant));
+        return Result.success(sysTenantService.updateByTenantCode(tenant));
     }
 
-    @DeleteMapping("/{id}")
-    public Result<?> delete(@PathVariable Long id) {
-        return Result.success(sysTenantService.deleteById(id));
+    @DeleteMapping("/{tenantCode}")
+    public Result<?> delete(@PathVariable String tenantCode) {
+        return Result.success(sysTenantService.deleteByTenantCode(tenantCode));
     }
 }

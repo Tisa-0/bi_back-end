@@ -13,16 +13,17 @@ import java.util.Date;
 public class FlowInstance implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
+    @TableId(value = "instance_id", type = IdType.INPUT)
+    private String instanceId;
 
-    private Long flowId;
+    private String flowCode;
 
     private String instanceName;
 
     private Long applicantId;
 
-    private Long tenantId; // 租户ID（产品智能定制模块需要）
+    @TableField("tenant_code")
+    private String tenantCode; // 租户编码（产品智能定制模块需要）
 
     private String currentNodeKey;
 

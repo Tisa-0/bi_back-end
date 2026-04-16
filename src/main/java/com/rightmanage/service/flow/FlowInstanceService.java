@@ -10,37 +10,37 @@ public interface FlowInstanceService {
     /**
      * 发起流程
      */
-    Long startFlow(FlowStartDTO dto, Long userId);
+    String startFlow(FlowStartDTO dto, Long userId);
 
     /**
      * 审批流程任务
      */
-    void approveFlow(Long taskId, String action, String comment, Long userId);
+    void approveFlow(String taskId, String action, String comment, Long userId);
 
     /**
      * 撤销流程
      */
-    void cancelFlow(Long instanceId, Long userId);
+    void cancelFlow(String instanceId, Long userId);
 
     /**
      * 终止流程（管理员）
      */
-    void terminateFlow(Long instanceId, Long userId);
+    void terminateFlow(String instanceId, Long userId);
 
     /**
      * 获取我的流转（发起的流程）- 分页
      */
-    IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, String tenantCode, Long flowId, String typeCode, String currentNodeKey, Integer pageNum, Integer pageSize);
+    IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, String tenantCode, String flowCode, String typeCode, String currentNodeKey, Integer pageNum, Integer pageSize);
 
     /**
      * 获取我的审批（待处理/已处理任务）- 分页
      */
-    IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, String tenantCode, Long flowId, String typeCode, String nodeKey, Integer pageNum, Integer pageSize);
+    IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, String tenantCode, String flowCode, String typeCode, String nodeKey, Integer pageNum, Integer pageSize);
 
     /**
      * 获取流程详情
      */
-    FlowDetailVO getFlowDetail(Long instanceId);
+    FlowDetailVO getFlowDetail(String instanceId);
 
     /**
      * 获取所有流程实例列表
@@ -63,7 +63,7 @@ public interface FlowInstanceService {
      * @param userId 操作人ID
      * @param reason 重置原因
      */
-    void resetTaskStatus(Long taskId, Long userId, String reason);
+    void resetTaskStatus(String taskId, Long userId, String reason);
 
     /**
      * 【新增】获取任务状态文本
@@ -86,17 +86,17 @@ public interface FlowInstanceService {
      * @param userId 操作人ID
      * @return 通知结果描述
      */
-    String triggerNodeNotify(Long instanceId, Long userId);
+    String triggerNodeNotify(String instanceId, Long userId);
 
     /**
      * 【新增】获取角色+动态用户（role_dynamic_user）节点的候选用户列表
      * @param moduleCode 模块编码
      * @param roleIds 逗号分隔的角色ID
-     * @param tenantId 租户ID（可为null）
+     * @param tenantCode 租户编码（可为null）
      * @param sourceOrgId 发起机构ID（可为null）
      * @return 符合条件的用户列表（包含 id, username）
      */
-    List<Map<String, Object>> getRoleDynamicUsers(String moduleCode, String roleIds, Long tenantId, Long sourceOrgId);
+    List<Map<String, Object>> getRoleDynamicUsers(String moduleCode, String roleIds, String tenantCode, String sourceOrgId);
 
     /**
      * 【新增】统一查询接口
@@ -119,7 +119,7 @@ public interface FlowInstanceService {
      * @return 分页任务列表
      */
     IPage<FlowTaskVO> adminAllTasks(Integer taskStatus, String moduleCode, String tenantCode,
-                                     Long flowId, String flowCode, String typeCode, String nodeKey,
+                                     String flowCode, String typeCode, String nodeKey,
                                      Integer pageNum, Integer pageSize);
 
     /**
@@ -130,7 +130,7 @@ public interface FlowInstanceService {
      * @param userId 操作人ID（管理员）
      * @return 回退结果描述（成功或"已回退至流程初始状态"）
      */
-    String rollbackFlow(Long instanceId, Long userId);
+    String rollbackFlow(String instanceId, Long userId);
 
     /**
      * 【新增】驳回时通知业务执行模块
@@ -142,5 +142,5 @@ public interface FlowInstanceService {
      * @param operator 操作人信息
      * @param comment 驳回意见
      */
-    void notifyModulesOnReject(Long instanceId, Long flowId, String nodeKey, String nodeName, SysUser operator, String comment);
+    void notifyModulesOnReject(String instanceId, String flowCode, String nodeKey, String nodeName, SysUser operator, String comment);
 }

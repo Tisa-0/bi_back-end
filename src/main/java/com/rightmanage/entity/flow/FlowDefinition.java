@@ -13,12 +13,10 @@ import java.util.Date;
 public class FlowDefinition implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
+    @TableId(value = "flow_code", type = IdType.INPUT)
+    private String flowCode;
 
     private String flowName;
-
-    private String flowCode;
 
     private String flowJson;
 
@@ -50,6 +48,6 @@ public class FlowDefinition implements Serializable {
     // 流程所属模块（A/B/C）
     private String moduleCode;
 
-    // 流程所属资产类型ID（asset_type.id）
-    private Long assetTypeId;
+    // 流程所属资产类型编码（asset_type.type_code）
+    private String assetTypeId;
 }

@@ -103,7 +103,7 @@ public class FlowCallbackController {
      */
     @PostMapping("/reset")
     public Result<?> resetTask(
-            @RequestParam Long taskId,
+            @RequestParam String taskId,
             @RequestParam Long userId,
             @RequestParam(required = false) String reason) {
         

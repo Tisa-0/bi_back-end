@@ -26,9 +26,9 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
     private SysAssetMapper sysAssetMapper;
 
     @Override
-    public IPage<SysUserAsset> page(Integer pageNum, Integer pageSize, Long userId, String moduleCode, Long typeId, Long tenantId) {
+    public IPage<SysUserAsset> page(Integer pageNum, Integer pageSize, Long userId, String moduleCode, Long typeId, String tenantCode) {
         Page<SysUserAsset> page = new Page<>(pageNum, pageSize);
-        LambdaQueryWrapper<SysUserAsset> wrapper = buildQueryWrapper(userId, moduleCode, typeId, tenantId);
+        LambdaQueryWrapper<SysUserAsset> wrapper = buildQueryWrapper(userId, moduleCode, typeId, tenantCode);
 
         IPage<SysUserAsset> result = sysUserAssetMapper.selectPage(page, wrapper);
 
@@ -39,8 +39,8 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
     }
 
     @Override
-    public List<SysUserAsset> list(Long userId, String moduleCode, Long typeId, Long tenantId) {
-        LambdaQueryWrapper<SysUserAsset> wrapper = buildQueryWrapper(userId, moduleCode, typeId, tenantId);
+    public List<SysUserAsset> list(Long userId, String moduleCode, Long typeId, String tenantCode) {
+        LambdaQueryWrapper<SysUserAsset> wrapper = buildQueryWrapper(userId, moduleCode, typeId, tenantCode);
         List<SysUserAsset> list = sysUserAssetMapper.selectList(wrapper);
 
         // 填充关联的资产信息
@@ -49,7 +49,7 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
         return list;
     }
 
-    private LambdaQueryWrapper<SysUserAsset> buildQueryWrapper(Long userId, String moduleCode, Long typeId, Long tenantId) {
+    private LambdaQueryWrapper<SysUserAsset> buildQueryWrapper(Long userId, String moduleCode, Long typeId, String tenantCode) {
         LambdaQueryWrapper<SysUserAsset> wrapper = new LambdaQueryWrapper<>();
 
         if (userId != null) {
@@ -61,8 +61,8 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
         if (typeId != null) {
             wrapper.eq(SysUserAsset::getTypeId, typeId);
         }
-        if (tenantId != null) {
-            wrapper.eq(SysUserAsset::getTenantId, tenantId);
+        if (tenantCode != null && !tenantCode.trim().isEmpty()) {
+            wrapper.eq(SysUserAsset::getTenantCode, tenantCode);
         }
 
         wrapper.orderByDesc(SysUserAsset::getCreateTime);
@@ -124,7 +124,7 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
 
     @Override
     @Transactional
-    public boolean bindAssets(Long userId, List<Long> assetIds, String moduleCode, Long typeId, Long tenantId) {
+    public boolean bindAssets(Long userId, List<Long> assetIds, String moduleCode, Long typeId, String tenantCode) {
         if (assetIds == null || assetIds.isEmpty()) {
             return true;
         }
@@ -144,7 +144,7 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
                 userAsset.setAssetId(assetId);
                 userAsset.setModuleCode(moduleCode);
                 userAsset.setTypeId(typeId);
-                userAsset.setTenantId(tenantId);
+                userAsset.setTenantCode(tenantCode);
                 userAssets.add(userAsset);
             }
         }
@@ -178,7 +178,7 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
     }
 
     @Override
-    public List<Long> getBoundAssetIds(Long userId, String moduleCode, Long typeId, Long tenantId) {
+    public List<Long> getBoundAssetIds(Long userId, String moduleCode, Long typeId, String tenantCode) {
         LambdaQueryWrapper<SysUserAsset> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysUserAsset::getUserId, userId);
 
@@ -188,8 +188,8 @@ public class SysUserAssetServiceImpl implements SysUserAssetService {
         if (typeId != null) {
             wrapper.eq(SysUserAsset::getTypeId, typeId);
         }
-        if (tenantId != null) {
-            wrapper.eq(SysUserAsset::getTenantId, tenantId);
+        if (tenantCode != null && !tenantCode.trim().isEmpty()) {
+            wrapper.eq(SysUserAsset::getTenantCode, tenantCode);
         }
 
         List<SysUserAsset> list = sysUserAssetMapper.selectList(wrapper);

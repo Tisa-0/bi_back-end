@@ -15,10 +15,10 @@ import java.util.Date;
 public class FlowOperationLog implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
+    @TableId(value = "log_id", type = IdType.INPUT)
+    private String logId;
 
-    private Long instanceId;
+    private String instanceId;
 
     private Long operatorId;
 

@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -54,17 +56,17 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private static final Logger log = LoggerFactory.getLogger(FlowInstanceServiceImpl.class);
 
     private final ThreadLocal<Map<String, DynamicHandlerDTO>> dynamicHandlerThreadLocal = new ThreadLocal<>();
-    // 多租户审批节点：发起时选择的租户ID列表
-    private final ThreadLocal<List<Long>> nodeTenantsThreadLocal = new ThreadLocal<>();
+    // 多租户审批节点：发起时选择的租户编码列表
+    private final ThreadLocal<List<String>> nodeTenantsThreadLocal = new ThreadLocal<>();
     // 机构相关审批：发起时选择的机构ID
-    private final ThreadLocal<Long> nodeSourceOrgIdThreadLocal = new ThreadLocal<>();
+    private final ThreadLocal<String> nodeSourceOrgIdThreadLocal = new ThreadLocal<>();
 
     private static final Map<String, TaskCallbackContext> callbackTokenMap = new ConcurrentHashMap<>();
 
     @Data
     public static class TaskCallbackContext {
-        private Long taskId;
-        private Long instanceId;
+        private String taskId;
+        private String instanceId;
         private String moduleCode;
         private String nodeKey;
         private Long operatorId;
@@ -86,6 +88,39 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         private List<FlowLine> lines;
     }
 
+    private Map<String, String> buildFlowJsonNodeAliasMap(FlowJsonData flowJsonData) {
+        Map<String, String> aliasMap = new HashMap<>();
+        if (flowJsonData == null || flowJsonData.getNodes() == null) {
+            return aliasMap;
+        }
+        for (Map<String, Object> node : flowJsonData.getNodes()) {
+            if (node == null) {
+                continue;
+            }
+            Object idObj = node.get("id");
+            Object nodeKeyObj = node.get("nodeKey");
+            String id = idObj == null ? null : String.valueOf(idObj).trim();
+            String nodeKey = nodeKeyObj == null ? null : String.valueOf(nodeKeyObj).trim();
+            if (StringUtils.hasText(id) && StringUtils.hasText(nodeKey)) {
+                aliasMap.put(id, nodeKey);
+            }
+        }
+        return aliasMap;
+    }
+
+    private void mergeFlowJsonAliasesIntoNodeIdMap(Map<String, FlowNodeConfig> nodeKeyMap,
+            Map<String, FlowNodeConfig> nodeIdMap, Map<String, String> flowJsonNodeAliasMap) {
+        if (flowJsonNodeAliasMap == null || flowJsonNodeAliasMap.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, String> entry : flowJsonNodeAliasMap.entrySet()) {
+            FlowNodeConfig cfg = nodeKeyMap.get(entry.getValue());
+            if (cfg != null) {
+                nodeIdMap.put(entry.getKey(), cfg);
+            }
+        }
+    }
+
     private TaskCallbackContext getCallbackContext(String callbackToken) {
         TaskCallbackContext ctx = callbackTokenMap.get(callbackToken);
         if (ctx != null) {
@@ -102,14 +137,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         ctx = new TaskCallbackContext();
-        ctx.setTaskId(task.getId());
+        ctx.setTaskId(task.getTaskId());
         ctx.setInstanceId(task.getInstanceId());
         ctx.setNodeKey(task.getNodeKey());
         ctx.setCallbackTime(task.getExecuteTime());
 
         FlowInstance instance = flowInstanceMapper.selectById(task.getInstanceId());
         if (instance != null) {
-            FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+            FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
             ctx.setModuleCode(flow != null ? flow.getModuleCode() : null);
         }
 
@@ -178,26 +213,33 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public Long startFlow(FlowStartDTO dto, Long userId) {
-        System.out.println("startFlow called - flowId: " + dto.getFlowId() + ", userId: " + userId);
+    public String startFlow(FlowStartDTO dto, Long userId) {
+        if (dto == null) {
+            throw new RuntimeException("请求体不能为空");
+        }
+        System.out.println("startFlow called - flowId: " + dto.getFlowCode() + ", userId: " + userId);
         try {
             return startFlowInternal(dto, userId);
         } catch (Exception e) {
             System.out.println("startFlow exception: " + e.getMessage());
             e.printStackTrace();
             throw e;
+        } finally {
+            dynamicHandlerThreadLocal.remove();
+            nodeTenantsThreadLocal.remove();
+            nodeSourceOrgIdThreadLocal.remove();
         }
     }
 
-    private Long startFlowInternal(FlowStartDTO dto, Long userId) {
-        FlowDefinition flow = flowDefinitionMapper.selectById(dto.getFlowId());
+    private String startFlowInternal(FlowStartDTO dto, Long userId) {
+        FlowDefinition flow = flowDefinitionMapper.selectById(dto.getFlowCode());
         if (flow == null || flow.getStatus() != 1) {
             throw new RuntimeException("流程不存在或未启用");
         }
 
         // 从 nodeConfigs 构建运行时配置 map（nodeKey -> DTO），同时汇总 nodeTenants
         Map<String, DynamicHandlerDTO> dynamicHandlerMap = new HashMap<>();
-        List<Long> resolvedNodeTenants = new ArrayList<>();
+        List<String> resolvedNodeTenants = new ArrayList<>();
 
         if (dto.getNodeConfigs() != null && !dto.getNodeConfigs().isEmpty()) {
             for (FlowNodeConfigDTO nc : dto.getNodeConfigs()) {
@@ -205,27 +247,27 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         + ", handlerType: " + nc.getHandlerType()
                         + ", handlerId: " + nc.getHandlerId()
                         + ", handlerName: " + nc.getHandlerName()
-                        + ", tenantId: " + nc.getTenantId());
+                        + ", tenantCode: " + nc.getTenantCode());
 
                 DynamicHandlerDTO dto2 = new DynamicHandlerDTO();
                 dto2.setNodeKey(nc.getNodeKey());
                 dto2.setHandlerId(nc.getHandlerId());
                 dto2.setHandlerName(nc.getHandlerName());
-                dto2.setTenantId(nc.getTenantId());
+                dto2.setTenantCode(nc.getTenantCode());
                 dto2.setSourceOrgId(nc.getSourceOrgId());
                 dto2.setModuleCode(nc.getModuleCode());
                 dynamicHandlerMap.put(nc.getNodeKey(), dto2);
 
-                // 汇总非空的 tenantId（保留到列表，用于 ThreadLocal）
-                if (nc.getTenantId() != null && !resolvedNodeTenants.contains(nc.getTenantId())) {
-                    resolvedNodeTenants.add(nc.getTenantId());
+                // 汇总非空的 tenantCode（保留到列表，用于 ThreadLocal）
+                if (nc.getTenantCode() != null && !resolvedNodeTenants.contains(nc.getTenantCode())) {
+                    resolvedNodeTenants.add(nc.getTenantCode());
                 }
             }
         }
         dynamicHandlerThreadLocal.set(dynamicHandlerMap);
 
         // 收集 nodeConfigs 中的 sourceOrgId（取第一个非空值，用于机构相关审批）
-        Long globalSourceOrgId = null;
+        String globalSourceOrgId = null;
         if (dto.getNodeConfigs() != null) {
             for (FlowNodeConfigDTO nc : dto.getNodeConfigs()) {
                 if (nc.getSourceOrgId() != null) {
@@ -237,18 +279,21 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         nodeSourceOrgIdThreadLocal.set(globalSourceOrgId);
 
         // 解析多租户审批节点的租户列表（优先用 nodeConfigs 汇总结果，降级用顶层字段）
-        List<Long> nodeTenants = !resolvedNodeTenants.isEmpty() ? resolvedNodeTenants
+        List<String> nodeTenants = !resolvedNodeTenants.isEmpty() ? resolvedNodeTenants
                 : (dto.getNodeTenants() != null ? dto.getNodeTenants() : new ArrayList<>());
         if (!nodeTenants.isEmpty()) {
             System.out.println("===== [多租户审批] 允许的租户 =====");
-            System.out.println("  租户IDs: " + nodeTenants);
+            System.out.println("  租户Codes: " + nodeTenants);
             System.out.println("========================================");
         }
         nodeTenantsThreadLocal.set(nodeTenants);
 
         SysUser applicant = sysUserService.getById(userId);
+        if (applicant == null) {
+            throw new RuntimeException("发起人不存在，userId=" + userId);
+        }
 
-        boolean needTenant = flowDefinitionService.checkFlowNeedTenant(dto.getFlowId());
+        boolean needTenant = flowDefinitionService.checkFlowNeedTenant(dto.getFlowCode());
         if (needTenant && (nodeTenants == null || nodeTenants.isEmpty())) {
             throw new RuntimeException("该流程包含多租户审批节点，必须选择至少一个租户");
         }
@@ -260,16 +305,17 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         FlowInstance instance = new FlowInstance();
-        instance.setFlowId(dto.getFlowId());
+        instance.setInstanceId(UUID.randomUUID().toString().replace("-", ""));
+        instance.setFlowCode(dto.getFlowCode());
         instance.setInstanceName(dto.getInstanceName());
         instance.setApplicantId(userId);
-        instance.setTenantId(dto.getTenantId());
+        instance.setTenantCode(dto.getTenantCode());
         instance.setCurrentNodeName("开始节点");
         instance.setStatus(FlowInstanceStatus.RUNNING.getCode());
         instance.setAttachmentUrl(dto.getAttachmentUrl());
         instance.setAttachmentName(dto.getAttachmentName());
 
-        if (dto.getFlowId() != null && dto.getFlowId() == 5L) {
+        if ("REPORT_RELEASE".equals(dto.getFlowCode())) {
             String randomUrl = "https://gray.example.com/release/" + UUID.randomUUID().toString().substring(0, 8);
             instance.setExtraInfo("请访问灰度发布链接：" + randomUrl);
         }
@@ -289,12 +335,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         flowInstanceMapper.insert(instance);
 
-        logService.saveLog(instance.getId(), userId, applicant.getUsername(),
+        logService.saveLog(instance.getInstanceId(), userId, applicant.getUsername(),
                 FlowOperationType.INIT.getCode(), "用户" + applicant.getUsername() + "发起流程：" + dto.getInstanceName());
 
         List<FlowNodeConfig> nodeConfigs = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, dto.getFlowId())
+                        .eq(FlowNodeConfig::getFlowCode, dto.getFlowCode())
                         .orderByAsc(FlowNodeConfig::getSort)
         );
 
@@ -303,11 +349,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         List<FlowLine> flowLines = new ArrayList<>();
+        Map<String, String> flowJsonNodeAliasMap = new HashMap<>();
         if (flow.getFlowJson() != null && !flow.getFlowJson().isEmpty()) {
             try {
                 FlowJsonData flowJsonData = objectMapper.readValue(flow.getFlowJson(), FlowJsonData.class);
                 if (flowJsonData != null && flowJsonData.getLines() != null) {
                     flowLines = flowJsonData.getLines();
+                    flowJsonNodeAliasMap = buildFlowJsonNodeAliasMap(flowJsonData);
                     System.out.println("===== [调试] 解析 flowJson 连线信息，共 " + flowLines.size() + " 条连线 =====");
                     for (int i = 0; i < flowLines.size(); i++) {
                         FlowLine fl = flowLines.get(i);
@@ -319,17 +367,18 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             }
         }
 
-        // 构建节点映射：nodeKey -> FlowNodeConfig 和 uuid -> FlowNodeConfig
+        // 构建节点映射：nodeKey -> FlowNodeConfig 和 nodeId -> FlowNodeConfig
         Map<String, FlowNodeConfig> nodeKeyMap = new HashMap<>();
         Map<String, FlowNodeConfig> nodeIdMap = new HashMap<>();
         System.out.println("===== [调试] 构建节点映射 =====");
         for (FlowNodeConfig node : nodeConfigs) {
             nodeKeyMap.put(node.getNodeKey(), node);
-            if (StringUtils.hasText(node.getUuid())) {
-                nodeIdMap.put(node.getUuid(), node);
+            if (StringUtils.hasText(node.getNodeId())) {
+                nodeIdMap.put(node.getNodeId(), node);
             }
-            System.out.println("  节点: nodeKey=" + node.getNodeKey() + ", uuid=" + node.getUuid() + ", type=" + node.getNodeType());
+            System.out.println("  节点: nodeKey=" + node.getNodeKey() + ", nodeId=" + node.getNodeId() + ", type=" + node.getNodeType());
         }
+        mergeFlowJsonAliasesIntoNodeIdMap(nodeKeyMap, nodeIdMap, flowJsonNodeAliasMap);
         System.out.println("  nodeIdMap 大小: " + nodeIdMap.size() + ", nodeKeyMap 大小: " + nodeKeyMap.size());
 
         // 找到开始节点
@@ -346,8 +395,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         // 创建开始节点的任务记录
-        createAutoTask(instance.getId(), startNode, "auto", "开始节点自动执行");
-        logService.saveLog(instance.getId(), null, null,
+        createAutoTask(instance.getInstanceId(), startNode, "auto", "开始节点自动执行");
+        logService.saveLog(instance.getInstanceId(), null, null,
                 FlowOperationType.NOTIFY.getCode(), "开始节点自动触发");
 
         // 【关键修改】查找开始节点的所有后续节点（支持并行分支）
@@ -376,16 +425,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         if ("REPORT_RELEASE".equals(flow.getFlowCode())) {
-            fillTextNodeCustomFields(instance.getId(), nodeConfigs);
+            fillTextNodeCustomFields(instance.getInstanceId(), nodeConfigs);
         }
 
         if (dto.getParams() != null && !dto.getParams().isEmpty()) {
-            saveFlowInstanceParams(instance.getId(), dto.getFlowId(), dto.getParams());
+            saveFlowInstanceParams(instance.getInstanceId(), dto.getFlowCode(), dto.getParams());
         }
 
-        dynamicHandlerThreadLocal.remove();
-        nodeTenantsThreadLocal.remove();
-        return instance.getId();
+        return instance.getInstanceId();
     }
 
     /**
@@ -397,12 +444,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         List<FlowNodeConfig> nextNodes = new ArrayList<>();
 
-        // 获取当前节点的标识（可能是 nodeKey 或 uuid）
+        // 获取当前节点的标识（可能是 nodeKey 或 nodeId）
         String currentKey = currentNode.getNodeKey();
-        String currentUuid = currentNode.getUuid();
+        String currentNodeId = currentNode.getNodeId();
 
         System.out.println("===== [调试] findNextNodesByLines =====");
-        System.out.println("  当前节点: nodeKey=[" + currentKey + "], uuid=[" + currentUuid + "], type=[" + currentNode.getNodeType() + "]");
+        System.out.println("  当前节点: nodeKey=[" + currentKey + "], nodeId=[" + currentNodeId + "], type=[" + currentNode.getNodeType() + "]");
         System.out.println("  连线总数: " + (flowLines == null ? 0 : flowLines.size()));
         System.out.println("  nodeIdMap: " + nodeIdMap.keySet());
         System.out.println("  nodeKeyMap: " + nodeKeyMap.keySet());
@@ -418,18 +465,28 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         for (int i = 0; i < flowLines.size(); i++) {
             FlowLine line = flowLines.get(i);
             // 匹配起始节点
-            boolean keyMatches = line.getFromNode().equals(currentKey);
-            boolean uuidMatches = currentUuid != null && line.getFromNode().equals(currentUuid);
-            boolean matches = keyMatches || uuidMatches;
+            String fromNode = line.getFromNode();
+            String toNode = line.getToNode();
+            if (!StringUtils.hasText(fromNode) || !StringUtils.hasText(toNode)) {
+                continue;
+            }
 
-            System.out.println("  连线" + i + ": fromNode=" + line.getFromNode() + ", toNode=" + line.getToNode()
-                    + " | keyMatches=" + keyMatches + "(currentKey=[" + currentKey + "]), uuidMatches=" + uuidMatches + "(currentUuid=[" + currentUuid + "])"
+            FlowNodeConfig fromCfg = nodeIdMap.get(fromNode);
+            if (fromCfg == null) {
+                fromCfg = nodeKeyMap.get(fromNode);
+            }
+            boolean keyMatches = fromCfg != null && Objects.equals(fromCfg.getNodeKey(), currentKey);
+            boolean nodeIdMatches = fromCfg != null && currentNodeId != null && Objects.equals(fromCfg.getNodeId(), currentNodeId);
+            boolean matches = keyMatches || nodeIdMatches;
+
+            System.out.println("  连线" + i + ": fromNode=" + fromNode + ", toNode=" + toNode
+                    + " | keyMatches=" + keyMatches + "(currentKey=[" + currentKey + "]), nodeIdMatches=" + nodeIdMatches + "(currentNodeId=[" + currentNodeId + "])"
                     + " | 匹配=" + matches);
 
             if (matches) {
-                String targetKey = line.getToNode();
+                String targetKey = toNode;
                 System.out.println("  -> 匹配成功! targetKey=" + targetKey);
-                // 如果 target 是 UUID，转为 nodeKey
+                // 如果 target 是 nodeId，转为 nodeKey
                 FlowNodeConfig targetNode = nodeIdMap.get(targetKey);
                 System.out.println("  -> nodeIdMap查找: " + (targetNode != null ? "找到 nodeKey=" + targetNode.getNodeKey() : "null"));
                 if (targetNode == null) {
@@ -455,6 +512,20 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         for (FlowNodeConfig n : nextNodes) {
             System.out.println("    - " + n.getNodeKey() + " (" + n.getNodeType() + ")");
         }
+
+        // 兼容旧数据：当 flowJson 连线中的节点ID与 flow_node_config.node_id 不一致时，回退到 sort 顺序
+        if (nextNodes.isEmpty() && allNodes != null && allNodes.size() > 1) {
+            for (int i = 0; i < allNodes.size(); i++) {
+                FlowNodeConfig node = allNodes.get(i);
+                boolean isCurrent = Objects.equals(node.getNodeKey(), currentNode.getNodeKey())
+                        || (StringUtils.hasText(node.getNodeId()) && Objects.equals(node.getNodeId(), currentNode.getNodeId()));
+                if (isCurrent && i + 1 < allNodes.size()) {
+                    nextNodes.add(allNodes.get(i + 1));
+                    System.out.println("  兼容回退: 使用 sort 顺序后续节点 -> " + allNodes.get(i + 1).getNodeKey());
+                    break;
+                }
+            }
+        }
         return nextNodes;
     }
 
@@ -465,7 +536,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
      * @param allNodes 所有节点
      * @param flowLines 所有连线
      * @param nodeKeyMap nodeKey 到节点的映射
-     * @param nodeIdMap uuid 到节点的映射
+     * @param nodeIdMap nodeId 到节点的映射
      * @param dynamicHandlerMap 动态处理人映射
      * @param processedNodes 已处理的节点（防止循环）
      */
@@ -484,7 +555,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 这防止了多次审批通过导致同一节点被重复创建的问题
         List<FlowTask> existingTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getInstanceId, instance.getInstanceId())
                         .eq(FlowTask::getNodeKey, node.getNodeKey())
                         .eq(FlowTask::getDeleted, 0)
         );
@@ -517,22 +588,22 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         } else if (FlowNodeType.NOTIFY.getCode().equals(nodeType)) {
             // 通知节点：自动触发
-            createAutoTask(instance.getId(), node, "notify", "通知节点自动执行");
-            logService.saveLog(instance.getId(), null, null,
+            createAutoTask(instance.getInstanceId(), node, "notify", "通知节点自动执行");
+            logService.saveLog(instance.getInstanceId(), null, null,
                     FlowOperationType.NOTIFY.getCode(), "通知节点[" + node.getNodeName() + "]自动执行");
 
         } else if (FlowNodeType.END.getCode().equals(nodeType)) {
             // 【修复】结束节点：不立即创建任务，只记录日志
             // 结束节点的任务应该在所有审批节点完成后，由 checkAndCompleteInstance 统一创建
-            logService.saveLog(instance.getId(), null, null,
+            logService.saveLog(instance.getInstanceId(), null, null,
                     FlowOperationType.COMPLETE.getCode(), "流程到达结束节点，等待所有审批节点完成");
             // 直接返回，不创建任务，不继续处理后续节点
             return;
 
         } else if (FlowNodeType.TEXT.getCode().equals(nodeType)) {
             // 文本节点：自动通过
-            createAutoTask(instance.getId(), node, "auto", "文本节点自动通过");
-            logService.saveLog(instance.getId(), null, null,
+            createAutoTask(instance.getInstanceId(), node, "auto", "文本节点自动通过");
+            logService.saveLog(instance.getInstanceId(), null, null,
                     FlowOperationType.PASS.getCode(), "文本节点[" + node.getNodeName() + "]自动通过");
 
         } else if (FlowNodeType.LOGIC_AND.getCode().equals(nodeType) || FlowNodeType.LOGIC_OR.getCode().equals(nodeType)) {
@@ -546,9 +617,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             
             if (predecessors.isEmpty()) {
                 // 如果没有前置审批节点，逻辑节点可以直接通过
-                createAutoTask(instance.getId(), node, "auto", 
+                createAutoTask(instance.getInstanceId(), node, "auto", 
                         FlowNodeType.LOGIC_AND.getCode().equals(nodeType) ? "逻辑与节点自动通过" : "逻辑或节点自动通过");
-                logService.saveLog(instance.getId(), null, null,
+                logService.saveLog(instance.getInstanceId(), null, null,
                         FlowOperationType.PASS.getCode(), 
                         FlowNodeType.LOGIC_AND.getCode().equals(nodeType) 
                             ? "逻辑与节点[" + node.getNodeName() + "]自动通过（无前置审批节点）"
@@ -559,7 +630,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 String predNames = predecessors.stream()
                         .map(FlowNodeConfig::getNodeName)
                         .collect(Collectors.joining(", "));
-                logService.saveLog(instance.getId(), null, null,
+                logService.saveLog(instance.getInstanceId(), null, null,
                         FlowOperationType.PASS.getCode(), 
                         "【" + logicType + "节点】[" + node.getNodeName() + "]等待前置审批节点完成：" + predNames);
                 
@@ -609,24 +680,25 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             // 直接取选中的单个用户创建任务
             SysUser handler = sysUserService.getById(nodeHandler.getHandlerId());
             FlowTask task = new FlowTask();
-            task.setInstanceId(instance.getId());
+            task.setTaskId(UUID.randomUUID().toString().replace("-", ""));
+            task.setInstanceId(instance.getInstanceId());
             task.setNodeKey(node.getNodeKey());
             task.setNodeName(node.getNodeName());
             task.setNodeType(node.getNodeType());
             task.setHandlerId(nodeHandler.getHandlerId());
             task.setHandlerName(handler != null ? handler.getUsername() : "");
             task.setStatus(0);
-            task.setTenantId(nodeHandler.getTenantId());
+            task.setTenantCode(nodeHandler.getTenantCode());
             task.setSourceOrgId(nodeHandler.getSourceOrgId());
             flowTaskMapper.insert(task);
-            logService.saveLog(instance.getId(), null, null,
+            logService.saveLog(instance.getInstanceId(), null, null,
                     FlowOperationType.INIT.getCode(),
                     "审批节点[" + node.getNodeName() + "]已分配处理人：" + task.getHandlerName());
             return;
         }
 
         // 判断该节点是否为多租户审批（审批人模块是 multiTenant=1 且 handlerType=role）
-        Long selectedTenant = null;
+        String selectedTenant = null;
         boolean isMultiTenantNode = "role".equals(node.getHandlerType())
                 && sysModuleService.isMultiTenant(node.getModuleCode());
 
@@ -634,18 +706,18 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             // 优先从节点专属配置读取租户（前端在 nodeConfigs 中配置的），
             // 如果没有则降级使用全局 nodeTenantsThreadLocal（兼容旧逻辑）
             DynamicHandlerDTO nodeHandler = dynamicHandlerMap.get(node.getNodeKey());
-            Long nodeSpecificTenant = null;
-            if (nodeHandler != null && nodeHandler.getTenantId() != null) {
-                nodeSpecificTenant = nodeHandler.getTenantId();
+            String nodeSpecificTenant = null;
+            if (nodeHandler != null && nodeHandler.getTenantCode() != null) {
+                nodeSpecificTenant = nodeHandler.getTenantCode();
             } else {
-                List<Long> threadTenants = nodeTenantsThreadLocal.get();
+                List<String> threadTenants = nodeTenantsThreadLocal.get();
                 if (threadTenants != null && !threadTenants.isEmpty()) {
                     nodeSpecificTenant = threadTenants.get(0);
                 }
             }
             if (nodeSpecificTenant == null) {
                 System.out.println("createApprovalTasks - 警告：节点 " + node.getNodeKey() + " 是多租户审批节点，但未传入租户选择");
-                logService.saveLog(instance.getId(), null, null,
+                logService.saveLog(instance.getInstanceId(), null, null,
                         FlowOperationType.INIT.getCode(),
                         "审批节点[" + node.getNodeName() + "]是多租户审批节点，但未选择租户，无法分配处理人");
                 return;
@@ -656,7 +728,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         // 判断 role 类型审批是否有 org_related=1 的角色
-        Long sourceOrgId = null;
+        String sourceOrgId = null;
         boolean hasOrgRelatedRole = false;
         if ("role".equals(node.getHandlerType()) && StringUtils.hasText(node.getHandlerIds())) {
             for (String roleId : node.getHandlerIds().split(",")) {
@@ -676,7 +748,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             }
             if (sourceOrgId == null) {
                 System.out.println("createApprovalTasks - 警告：节点 " + node.getNodeKey() + " 是机构相关审批节点，但未传入发起机构");
-                logService.saveLog(instance.getId(), null, null,
+                logService.saveLog(instance.getInstanceId(), null, null,
                         FlowOperationType.INIT.getCode(),
                         "审批节点[" + node.getNodeName() + "]是机构相关审批节点，但未选择发起机构，无法分配处理人");
                 return;
@@ -686,7 +758,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         // 收集所有符合条件的处理人及其归属租户
         Set<String> allHandlerIds = new HashSet<>();
-        Map<String, Long> handlerTenantMap = new HashMap<>(); // handlerId -> tenantId
+        Map<String, String> handlerTenantMap = new HashMap<>(); // handlerId -> tenantCode
 
         if (isMultiTenantNode) {
             // 多租户审批：使用单选租户查询
@@ -701,12 +773,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             }
         } else {
             // 非多租户审批：使用流程实例的租户
-            String handlerIds = getRealHandlerIdsWithOrgFilter(node, instance.getTenantId(), sourceOrgId, dynamicHandlerMap);
+            String handlerIds = getRealHandlerIdsWithOrgFilter(node, instance.getTenantCode(), sourceOrgId, dynamicHandlerMap);
             if (StringUtils.hasText(handlerIds)) {
                 for (String hid : handlerIds.split(",")) {
                     if (StringUtils.hasText(hid)) {
                         allHandlerIds.add(hid.trim());
-                        handlerTenantMap.put(hid.trim(), instance.getTenantId());
+                        handlerTenantMap.put(hid.trim(), instance.getTenantCode());
                     }
                 }
             }
@@ -716,11 +788,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         String handlerNames = getHandlerNames(node, handlerIds, dynamicHandlerMap);
 
         if (allHandlerIds.isEmpty()) {
-            System.out.println("createApprovalTasks - 警告：节点 " + node.getNodeKey() + " 没有处理人");
-            logService.saveLog(instance.getId(), null, null,
-                    FlowOperationType.INIT.getCode(),
-                    "审批节点[" + node.getNodeName() + "]没有配置处理人");
-            return;
+            String msg = "审批节点[" + node.getNodeName() + "]未匹配到可用处理人，请检查角色、租户与发起机构配置";
+            System.out.println("createApprovalTasks - 错误：" + msg);
+            logService.saveLog(instance.getInstanceId(), null, null,
+                    FlowOperationType.INIT.getCode(), msg);
+            throw new RuntimeException(msg);
         }
 
         System.out.println("createApprovalTasks - handlerIds: " + handlerIds + ", handlerNames: " + handlerNames);
@@ -729,7 +801,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             // 幂等检查：如果该 handler 的任务已存在，不再重复创建
             Long existingCount = flowTaskMapper.selectCount(
                     new LambdaQueryWrapper<FlowTask>()
-                            .eq(FlowTask::getInstanceId, instance.getId())
+                            .eq(FlowTask::getInstanceId, instance.getInstanceId())
                             .eq(FlowTask::getNodeKey, node.getNodeKey())
                             .eq(FlowTask::getHandlerId, Long.parseLong(handlerId))
                             .eq(FlowTask::getDeleted, 0)
@@ -740,21 +812,22 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             SysUser handler = sysUserService.getById(Long.parseLong(handlerId));
             FlowTask task = new FlowTask();
-            task.setInstanceId(instance.getId());
+            task.setTaskId(UUID.randomUUID().toString().replace("-", ""));
+            task.setInstanceId(instance.getInstanceId());
             task.setNodeKey(node.getNodeKey());
             task.setNodeName(node.getNodeName());
             task.setNodeType(node.getNodeType());
             task.setHandlerId(Long.parseLong(handlerId));
             task.setHandlerName(handler != null ? handler.getUsername() : "");
             task.setStatus(0); // 待处理
-            // 多租户审批节点：记录该用户归属的租户ID，用于过滤"我的审批"
-            task.setTenantId(handlerTenantMap.get(handlerId));
+            // 多租户审批节点：记录该用户归属的租户编码，用于过滤"我的审批"
+            task.setTenantCode(handlerTenantMap.get(handlerId));
             // 机构相关审批：记录发起机构ID，用于审批时的机构层级过滤
             task.setSourceOrgId(sourceOrgId);
             flowTaskMapper.insert(task);
         }
 
-        logService.saveLog(instance.getId(), null, null,
+        logService.saveLog(instance.getInstanceId(), null, null,
                 FlowOperationType.INIT.getCode(),
                 "审批节点[" + node.getNodeName() + "]已分配处理人：" + handlerNames);
 
@@ -771,7 +844,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             System.out.println("通知内容模板: " + (notifyContent.isEmpty() ? "（未填写）" : notifyContent));
             System.out.println("======================================");
 
-            logService.saveLog(instance.getId(), null, null,
+            logService.saveLog(instance.getInstanceId(), null, null,
                     FlowOperationType.NOTIFY.getCode(),
                     "【审批通知】通知方式：" + node.getNotifyType() + "，内容：" + (notifyContent.isEmpty() ? "（未填写）" : notifyContent));
         }
@@ -786,7 +859,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 查找所有结束节点的任务
         List<FlowTask> endTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getInstanceId, instance.getInstanceId())
                         .eq(FlowTask::getDeleted, 0)
                         .eq(FlowTask::getNodeType, FlowNodeType.END.getCode())
         );
@@ -794,11 +867,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 获取所有任务
         List<FlowTask> allTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getInstanceId, instance.getInstanceId())
                         .eq(FlowTask::getDeleted, 0)
         );
 
-        System.out.println("checkAndCompleteInstance - 实例ID: " + instance.getId() + ", 状态: " + instance.getStatus());
+        System.out.println("checkAndCompleteInstance - 实例ID: " + instance.getInstanceId() + ", 状态: " + instance.getStatus());
         System.out.println("checkAndCompleteInstance - 结束节点任务数: " + endTasks.size() + ", 总任务数: " + allTasks.size());
         
         // 打印所有任务的状态
@@ -868,21 +941,21 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 // 获取结束节点配置
                 List<FlowNodeConfig> nodeConfigs = flowNodeConfigMapper.selectList(
                         new LambdaQueryWrapper<FlowNodeConfig>()
-                                .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                                .eq(FlowNodeConfig::getFlowCode, instance.getFlowCode())
                                 .eq(FlowNodeConfig::getNodeType, FlowNodeType.END.getCode())
                 );
                 if (!nodeConfigs.isEmpty()) {
                     FlowNodeConfig endNode = nodeConfigs.get(0);
-                    createAutoTask(instance.getId(), endNode, "auto", "流程结束");
+                    createAutoTask(instance.getInstanceId(), endNode, "auto", "流程结束");
                     System.out.println("checkAndCompleteInstance - 为结束节点创建任务");
                 }
             }
 
             // 重新查询验证
-            FlowInstance updated = flowInstanceMapper.selectById(instance.getId());
+            FlowInstance updated = flowInstanceMapper.selectById(instance.getInstanceId());
             System.out.println("checkAndCompleteInstance - 更新后流程状态: " + updated.getStatus());
             
-            logService.saveLog(instance.getId(), null, null,
+            logService.saveLog(instance.getInstanceId(), null, null,
                     FlowOperationType.COMPLETE.getCode(), "流程所有节点已完成，状态改为已完成");
         }
     }
@@ -895,8 +968,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         wrapper.eq(SysUserRole::getUserId, userId);
         List<SysUserRole> userRoles = sysUserRoleMapper.selectList(wrapper);
         for (SysUserRole ur : userRoles) {
-            SysRole role = sysRoleService.getById(ur.getRoleId());
-            if (role != null && "SUPER_ADMIN".equals(role.getRoleCode()) && "bi_workstation".equals(role.getModuleCode())) {
+            if ("SUPER_ADMIN".equals(ur.getRoleCode()) && "bi_workstation".equals(ur.getModuleCode())) {
                 return true;
             }
         }
@@ -904,7 +976,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public void approveFlow(Long taskId, String action, String comment, Long userId) {
+    public void approveFlow(String taskId, String action, String comment, Long userId) {
         FlowTask task = flowTaskMapper.selectById(taskId);
         if (task == null) {
             throw new RuntimeException("任务不存在");
@@ -925,7 +997,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         SysUser operator = sysUserService.getById(userId);
         String actionName = "approve".equals(action) ? "审批通过" : "审批驳回";
 
-        logService.saveLog(instance.getId(), userId, operator.getUsername(),
+        logService.saveLog(instance.getInstanceId(), userId, operator.getUsername(),
                 action, "用户" + operator.getUsername() + "对节点[" + task.getNodeName() + "]" + actionName + "，意见：" + comment);
 
         System.out.println(">>> approveFlow - 用户[" + operator.getUsername() + "]审批通过节点[" + task.getNodeName()
@@ -934,7 +1006,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 查询该节点的配置信息（审批通过和驳回都可能用到）
         FlowNodeConfig nodeConfig = flowNodeConfigMapper.selectOne(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                        .eq(FlowNodeConfig::getFlowCode, instance.getFlowCode())
                         .eq(FlowNodeConfig::getNodeKey, task.getNodeKey())
         );
 
@@ -947,7 +1019,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             // 【新增】驳回时通知业务执行模块
             if (nodeConfig != null && StringUtils.hasText(nodeConfig.getExecuteModules())) {
-                notifyModulesOnReject(instance.getId(), instance.getFlowId(),
+                notifyModulesOnReject(instance.getInstanceId(), instance.getFlowCode(),
                         task.getNodeKey(), task.getNodeName(), operator, comment);
             }
 
@@ -974,7 +1046,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             executeModuleAsync(nodeConfig.getExecuteModules(), instance, task, operator);
 
             // 记录日志
-            logService.saveLog(instance.getId(), userId, operator.getUsername(),
+            logService.saveLog(instance.getInstanceId(), userId, operator.getUsername(),
                     "approve", "节点[" + task.getNodeName() + "]审批通过，业务执行中，等待外部模块回调");
         } else {
             // 【修复】没有配置业务执行模块：状态直接设为"已通过"
@@ -1004,7 +1076,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     private void skipParallelTasks(FlowInstance instance, FlowTask completedTask) {
         List<FlowTask> parallelTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getInstanceId, instance.getInstanceId())
                         .eq(FlowTask::getNodeKey, completedTask.getNodeKey())
                         .eq(FlowTask::getStatus, 0)  // 只处理待处理的任务
                         .eq(FlowTask::getDeleted, 0)
@@ -1015,9 +1087,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             parallelTask.setComment("同节点其他审批人已通过，自动跳过");
             parallelTask.setExecuteTime(new Date());
             flowTaskMapper.updateById(parallelTask);
-            logService.saveLog(instance.getId(), parallelTask.getHandlerId(), parallelTask.getHandlerName(),
+            logService.saveLog(instance.getInstanceId(), parallelTask.getHandlerId(), parallelTask.getHandlerName(),
                     "skip", "审批节点[" + parallelTask.getNodeName() + "]其他审批人已通过，该任务已自动跳过");
-            System.out.println("skipParallelTasks - 跳过并行任务: taskId=" + parallelTask.getId()
+            System.out.println("skipParallelTasks - 跳过并行任务: taskId=" + parallelTask.getTaskId()
                     + ", handler=" + parallelTask.getHandlerName());
         }
     }
@@ -1031,7 +1103,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println("checkLogicNodesAfterApproval - 已完成节点: " + completedTask.getNodeKey() + ", " + completedTask.getNodeName());
         
         // 获取流程定义
-        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
         if (flow == null) {
             System.out.println("checkLogicNodesAfterApproval - 流程定义为空，直接返回");
             return;
@@ -1040,16 +1112,18 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 获取所有节点和连线
         List<FlowNodeConfig> allNodes = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                        .eq(FlowNodeConfig::getFlowCode, instance.getFlowCode())
                         .orderByAsc(FlowNodeConfig::getSort)
         );
 
         List<FlowLine> flowLines = new ArrayList<>();
+        Map<String, String> flowJsonNodeAliasMap = new HashMap<>();
         if (StringUtils.hasText(flow.getFlowJson())) {
             try {
                 FlowJsonData flowJsonData = objectMapper.readValue(flow.getFlowJson(), FlowJsonData.class);
                 if (flowJsonData != null && flowJsonData.getLines() != null) {
                     flowLines = flowJsonData.getLines();
+                    flowJsonNodeAliasMap = buildFlowJsonNodeAliasMap(flowJsonData);
                 }
             } catch (Exception e) {
                 log.warn("解析 flowJson 失败", e);
@@ -1061,10 +1135,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         Map<String, FlowNodeConfig> nodeIdMap = new HashMap<>();
         for (FlowNodeConfig node : allNodes) {
             nodeKeyMap.put(node.getNodeKey(), node);
-            if (StringUtils.hasText(node.getUuid())) {
-                nodeIdMap.put(node.getUuid(), node);
+            if (StringUtils.hasText(node.getNodeId())) {
+                nodeIdMap.put(node.getNodeId(), node);
             }
         }
+        mergeFlowJsonAliasesIntoNodeIdMap(nodeKeyMap, nodeIdMap, flowJsonNodeAliasMap);
 
         // 获取当前节点的配置
         FlowNodeConfig currentNode = nodeKeyMap.get(completedTask.getNodeKey());
@@ -1076,7 +1151,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println("checkLogicNodesAfterApproval - 找到 " + logicNodes.size() + " 个后续逻辑节点");
         for (int i = 0; i < logicNodes.size(); i++) {
             System.out.println("  逻辑节点[" + i + "]: nodeKey=" + logicNodes.get(i).getNodeKey()
-                    + ", uuid=" + logicNodes.get(i).getUuid());
+                    + ", nodeId=" + logicNodes.get(i).getNodeId());
         }
 
         // 找出所有需要通过 fallback 流转的直接后续节点（这些节点不在逻辑节点控制路径上）
@@ -1126,7 +1201,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 }
 
                 // 条件满足，流转逻辑节点控制的节点
-                logService.saveLog(instance.getId(), null, null,
+                logService.saveLog(instance.getInstanceId(), null, null,
                         FlowOperationType.PASS.getCode(),
                         "逻辑节点[" + logicNode.getNodeName() + "]条件满足，流转到后续节点");
 
@@ -1148,7 +1223,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 // 条件不满足，记录日志，但不阻止 fallback
                 List<String> pendingNodes = getPendingPredecessorNodes(instance, logicNode, allNodes, flowLines, nodeKeyMap, nodeIdMap);
                 String pendingStr = String.join(", ", pendingNodes);
-                logService.saveLog(instance.getId(), null, null,
+                logService.saveLog(instance.getInstanceId(), null, null,
                         "logic_wait", "审批通过[" + completedTask.getNodeName() + "]，逻辑节点[" + logicNode.getNodeName() + "]等待其他前置审批完成：" + pendingStr);
             }
         }
@@ -1279,14 +1354,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println("checkLogicNodeCondition - 找到 " + predecessorNodes.size() + " 个前置审批节点");
         for (int i = 0; i < predecessorNodes.size(); i++) {
             System.out.println("  前置节点[" + i + "]: nodeKey=" + predecessorNodes.get(i).getNodeKey()
-                    + ", uuid=" + predecessorNodes.get(i).getUuid());
+                    + ", nodeId=" + predecessorNodes.get(i).getNodeId());
         }
 
         if (predecessorNodes.isEmpty()) {
             // 【BUG追踪】记录详细诊断信息
             log.warn("[BUG追踪] checkLogicNodeCondition - 逻辑节点[{}]没有找到前置审批节点！"
-                    + "flowLines数量={}, allNodes数量={}, logicKey={}, logicUuid={}",
-                    logicNode.getNodeName(), flowLines.size(), allNodes.size(), logicNode.getNodeKey(), logicNode.getUuid());
+                    + "flowLines数量={}, allNodes数量={}, logicKey={}, logicNodeId={}",
+                    logicNode.getNodeName(), flowLines.size(), allNodes.size(), logicNode.getNodeKey(), logicNode.getNodeId());
             for (int i = 0; i < Math.min(10, flowLines.size()); i++) {
                 FlowLine line = flowLines.get(i);
                 log.warn("  flowLines[{}]: fromNode={}, toNode={}", i, line.getFromNode(), line.getToNode());
@@ -1304,7 +1379,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 获取这些审批节点的任务状态
         List<FlowTask> allTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getInstanceId, instance.getInstanceId())
                         .eq(FlowTask::getDeleted, 0)
         );
 
@@ -1360,7 +1435,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 获取当前实例的所有任务
         List<FlowTask> allTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getInstanceId, instance.getInstanceId())
                         .eq(FlowTask::getDeleted, 0)
         );
         
@@ -1381,7 +1456,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             // 查找该节点的所有待处理任务
             List<FlowTask> tasksToSkip = flowTaskMapper.selectList(
                     new LambdaQueryWrapper<FlowTask>()
-                            .eq(FlowTask::getInstanceId, instance.getId())
+                            .eq(FlowTask::getInstanceId, instance.getInstanceId())
                             .eq(FlowTask::getNodeKey, nodeKey)
                             .eq(FlowTask::getStatus, 0)
                             .eq(FlowTask::getDeleted, 0)
@@ -1390,7 +1465,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             for (FlowTask task : tasksToSkip) {
                 // 【修复】必须用 LambdaUpdateWrapper，否则 handlerId=null 不会清空数据库字段
                 LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
-                        .eq(FlowTask::getId, task.getId())
+                        .eq(FlowTask::getTaskId, task.getTaskId())
                         .eq(FlowTask::getDeleted, 0)
                         .set(FlowTask::getStatus, 5) // 已跳过
                         .set(FlowTask::getAction, "skip")
@@ -1399,7 +1474,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 flowTaskMapper.update(null, updateWrapper);
                 
                 // 记录操作日志
-                logService.saveLog(instance.getId(), null, null,
+                logService.saveLog(instance.getInstanceId(), null, null,
                         "skip", "审批节点[" + task.getNodeName() + "]因逻辑或条件满足被自动跳过");
                 
                 System.out.println("skipParallelApprovalNodes - 已将节点[" + task.getNodeName() + "]标记为已跳过");
@@ -1407,7 +1482,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
         
         if (!skipNodeKeys.isEmpty()) {
-            logService.saveLog(instance.getId(), null, null,
+            logService.saveLog(instance.getInstanceId(), null, null,
                     "skip", "逻辑或节点条件满足，跳过并列审批节点：" + String.join(", ", skipNodeKeys));
         }
     }
@@ -1436,10 +1511,19 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             // 查找所有指向 current 的前置节点（反向遍历连线）
             for (FlowLine line : flowLines) {
-                if (!line.getToNode().equals(currentKey) && !line.getToNode().equals(current.getUuid())) {
+                String toNode = line.getToNode();
+                String fromNodeKey = line.getFromNode();
+                if (!StringUtils.hasText(toNode) || !StringUtils.hasText(fromNodeKey)) {
                     continue;
                 }
-                String fromKey = line.getFromNode();
+                FlowNodeConfig toNodeCfg = nodeIdMap.get(toNode);
+                if (toNodeCfg == null) {
+                    toNodeCfg = nodeKeyMap.get(toNode);
+                }
+                if (toNodeCfg == null || !Objects.equals(toNodeCfg.getNodeKey(), current.getNodeKey())) {
+                    continue;
+                }
+                String fromKey = fromNodeKey;
                 FlowNodeConfig fromNode = nodeIdMap.get(fromKey);
                 if (fromNode == null) fromNode = nodeKeyMap.get(fromKey);
                 if (fromNode == null) continue;
@@ -1474,7 +1558,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         
         List<FlowTask> allTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
-                        .eq(FlowTask::getInstanceId, instance.getId())
+                        .eq(FlowTask::getInstanceId, instance.getInstanceId())
                         .eq(FlowTask::getDeleted, 0)
         );
 
@@ -1495,10 +1579,10 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
     @Async
     public void executeModuleAsync(String moduleCode, FlowInstance instance, FlowTask task, SysUser operator) {
-        Map<String, Object> params = flowCommonService.getFlowParams(instance.getId());
+        Map<String, Object> params = flowCommonService.getFlowParams(instance.getInstanceId());
 
         String flowCode = "";
-        FlowDefinition flowDefinition = flowDefinitionMapper.selectById(instance.getFlowId());
+        FlowDefinition flowDefinition = flowDefinitionMapper.selectById(instance.getFlowCode());
         if (flowDefinition != null) {
             flowCode = flowDefinition.getFlowCode();
         }
@@ -1513,8 +1597,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println("【异步模块调用】目标模块: " + moduleCode);
         System.out.println("【异步模块调用】流程编码(flow_code): " + flowCode);
         System.out.println("【异步模块调用】节点编码(node_key): " + task.getNodeKey());
-        System.out.println("【异步模块调用】流程实例ID: " + instance.getId());
-        System.out.println("【异步模块调用】任务ID: " + task.getId());
+        System.out.println("【异步模块调用】流程实例ID: " + instance.getInstanceId());
+        System.out.println("【异步模块调用】任务ID: " + task.getTaskId());
         System.out.println("【异步模块调用】回调令牌(callback_token): " + callbackToken);
         System.out.println("【异步模块调用】审批人: " + (operator != null ? operator.getUsername() : "系统"));
         System.out.println("【异步模块调用】审批时间: " + (task.getExecuteTime() != null ? task.getExecuteTime() : new Date()));
@@ -1528,8 +1612,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         System.out.println("【异步模块调用】========================================");
 
         TaskCallbackContext ctx = new TaskCallbackContext();
-        ctx.setTaskId(task.getId());
-        ctx.setInstanceId(instance.getId());
+        ctx.setTaskId(task.getTaskId());
+        ctx.setInstanceId(instance.getInstanceId());
         ctx.setModuleCode(moduleCode);
         ctx.setNodeKey(task.getNodeKey());
         ctx.setOperatorId(operator != null ? operator.getId() : null);
@@ -1537,7 +1621,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         ctx.setCallbackTime(new Date());
         callbackTokenMap.put(callbackToken, ctx);
 
-        logService.saveLog(instance.getId(), operator != null ? operator.getId() : null,
+        logService.saveLog(instance.getInstanceId(), operator != null ? operator.getId() : null,
                 operator != null ? operator.getUsername() : "系统",
                 "module_call_async", "异步调用模块[" + moduleCode + "]，flow_code: " + flowCode +
                 "，node_key: " + task.getNodeKey() + "，callback_token: " + callbackToken);
@@ -1548,7 +1632,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         //     Map<String, Object> requestBody = new HashMap<>();
         //     requestBody.put("flow_code", flowCode);
         //     requestBody.put("node_key", task.getNodeKey());
-        //     requestBody.put("instance_id", instance.getId());
+        //     requestBody.put("instance_id", instance.getInstanceId());
         //     requestBody.put("callback_token", callbackToken);
         //     requestBody.put("callback_url", callbackUrl);
         //     requestBody.put("params", params);
@@ -1564,9 +1648,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     /**
      * 驳回时通知所有涉及的业务执行模块
      */
-    public void notifyModulesOnReject(Long instanceId, Long flowId, String rejectedNodeKey, String rejectedNodeName, SysUser operator, String comment) {
-        FlowDefinition flowDefinition = flowDefinitionMapper.selectById(flowId);
-        String flowCode = flowDefinition != null ? flowDefinition.getFlowCode() : "";
+    public void notifyModulesOnReject(String instanceId, String flowCode, String rejectedNodeKey, String rejectedNodeName, SysUser operator, String comment) {
         Map<String, Object> params = flowCommonService.getFlowParams(instanceId);
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         String instanceName = instance != null ? instance.getInstanceName() : "";
@@ -1576,7 +1658,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             SysUser applicant = sysUserService.getById(applicantId);
             applicantName = applicant != null ? applicant.getUsername() : "";
         }
-        Long tenantId = instance != null ? instance.getTenantId() : null;
+        String tenantCode = instance != null ? instance.getTenantCode() : null;
 
         List<FlowTask> allTasks = flowTaskMapper.selectList(
                 new LambdaQueryWrapper<FlowTask>()
@@ -1606,7 +1688,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 1. 通知当前被驳回的节点
         FlowNodeConfig rejectedConfig = flowNodeConfigMapper.selectOne(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, flowId)
+                        .eq(FlowNodeConfig::getFlowCode, flowCode)
                         .eq(FlowNodeConfig::getNodeKey, rejectedNodeKey)
         );
         if (rejectedConfig != null && StringUtils.hasText(rejectedConfig.getExecuteModules())) {
@@ -1619,7 +1701,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 System.out.println("【驳回模块通知】[通知-当前驳回节点] 模块: " + module);
 
                 String logMsg = notifySingleModuleReject(module, flowCode, instanceId, instanceName,
-                        applicantName, rejectedNodeKey, rejectedNodeName, tenantId,
+                        applicantName, rejectedNodeKey, rejectedNodeName, tenantCode,
                         operator, comment, params, "当前驳回节点", rejectedNodeKey, rejectedNodeName);
                 logService.saveLog(instanceId, operator != null ? operator.getId() : null,
                         operator != null ? operator.getUsername() : "系统",
@@ -1637,7 +1719,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             }
             FlowNodeConfig cfg = flowNodeConfigMapper.selectOne(
                     new LambdaQueryWrapper<FlowNodeConfig>()
-                            .eq(FlowNodeConfig::getFlowId, flowId)
+                            .eq(FlowNodeConfig::getFlowCode, flowCode)
                             .eq(FlowNodeConfig::getNodeKey, task.getNodeKey())
             );
             if (cfg != null && StringUtils.hasText(cfg.getExecuteModules())) {
@@ -1654,7 +1736,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     System.out.println("  该节点通过时间: " + task.getExecuteTime());
 
                     String logMsg = notifySingleModuleReject(module, flowCode, instanceId, instanceName,
-                            applicantName, rejectedNodeKey, rejectedNodeName, tenantId,
+                            applicantName, rejectedNodeKey, rejectedNodeName, tenantCode,
                             operator, comment, params, "历史通过节点[" + task.getNodeName() + "]",
                             task.getNodeKey(), task.getNodeName());
                     logService.saveLog(instanceId, operator != null ? operator.getId() : null,
@@ -1680,7 +1762,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
      * @param applicantName      申请人
      * @param rejectedNodeKey    被驳回节点编码
      * @param rejectedNodeName   被驳回节点名称
-     * @param tenantId          租户ID
+     * @param tenantCode        租户编码
      * @param operator          驳回操作人
      * @param comment           驳回意见
      * @param params            流程参数
@@ -1688,9 +1770,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
      * @param notifyNodeKey     本次通知对应的节点key（HTTP请求体中使用该值）
      * @param notifyNodeName    本次通知对应的节点名称（HTTP请求体中使用该值）
      */
-    private String notifySingleModuleReject(String moduleCode, String flowCode, Long instanceId,
+    private String notifySingleModuleReject(String moduleCode, String flowCode, String instanceId,
             String instanceName, String applicantName, String rejectedNodeKey, String rejectedNodeName,
-            Long tenantId, SysUser operator, String comment, Map<String, Object> params,
+            String tenantCode, SysUser operator, String comment, Map<String, Object> params,
             String sourceDesc, String notifyNodeKey, String notifyNodeName) {
         String moduleEndpoint = getModuleCallbackBaseUrl(moduleCode);
         if (moduleEndpoint == null) {
@@ -1704,7 +1786,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         requestBody.put("instance_id", instanceId);
         requestBody.put("instance_name", instanceName);
         requestBody.put("applicant_name", applicantName);
-        requestBody.put("tenant_id", tenantId);
+        requestBody.put("tenant_code", tenantCode);
         requestBody.put("reject_node_key", notifyNodeKey);
         requestBody.put("reject_node_name", notifyNodeName);
         requestBody.put("reject_operator", operator != null ? operator.getUsername() : "系统");
@@ -1813,15 +1895,15 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             if (StringUtils.hasText(message)) {
                 logMsg += "，消息: " + message;
             }
-            logService.saveLog(instance.getId(), ctx.getOperatorId(), ctx.getOperatorName(),
+            logService.saveLog(instance.getInstanceId(), ctx.getOperatorId(), ctx.getOperatorName(),
                     "callback_success", logMsg);
 
-            System.out.println("【回调成功】任务ID: " + task.getId() + "，节点: " + task.getNodeKey());
+            System.out.println("【回调成功】任务ID: " + task.getTaskId() + "，节点: " + task.getNodeKey());
 
             result.put("success", true);
             result.put("message", "回调处理成功");
-            result.put("taskId", task.getId());
-            result.put("instanceId", instance.getId());
+            result.put("taskId", task.getTaskId());
+            result.put("instanceId", instance.getInstanceId());
 
         } else {
             task.setStatus(4);
@@ -1833,19 +1915,19 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             if (StringUtils.hasText(message)) {
                 logMsg += "，原因: " + message;
             }
-            logService.saveLog(instance.getId(), ctx.getOperatorId(), ctx.getOperatorName(),
+            logService.saveLog(instance.getInstanceId(), ctx.getOperatorId(), ctx.getOperatorName(),
                     "callback_failed", logMsg);
 
             result.put("success", true);
             result.put("message", "回调处理成功，任务已重置为「逻辑处理失败」状态");
-            result.put("taskId", task.getId());
+            result.put("taskId", task.getTaskId());
         }
 
         dynamicHandlerThreadLocal.remove();
         return result;
     }
 
-    public void resetTaskStatus(Long taskId, Long userId, String reason) {
+    public void resetTaskStatus(String taskId, Long userId, String reason) {
         FlowTask task = flowTaskMapper.selectById(taskId);
         if (task == null) {
             throw new RuntimeException("任务不存在");
@@ -1876,7 +1958,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             flowInstanceMapper.updateById(instance);
         }
 
-        logService.saveLog(instance.getId(), userId, sysUserService.getById(userId).getUsername(),
+        logService.saveLog(instance.getInstanceId(), userId, sysUserService.getById(userId).getUsername(),
                 "task_reset", "任务[" + task.getNodeName() + "]已重置");
 
         System.out.println("【任务重置】任务ID: " + taskId);
@@ -1965,25 +2047,22 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                                     dto.setHandlerId(handlerId instanceof Number ? ((Number) handlerId).longValue() : Long.parseLong(handlerId.toString()));
                                 }
                                 dto.setHandlerName((String) cfg.get("handlerName"));
-                                // 读取租户（支持新旧两种格式：新单选 tenantId、旧列表 tenantIds）
-                                Long tenantId = null;
-                                if (cfg.containsKey("tenantId") && cfg.get("tenantId") != null) {
-                                    Object tid = cfg.get("tenantId");
-                                    tenantId = tid instanceof Number ? ((Number) tid).longValue() : Long.parseLong(tid.toString());
-                                } else if (cfg.containsKey("tenantIds") && cfg.get("tenantIds") != null) {
-                                    // 兼容旧数据：取列表第一个
+                                // 读取租户（tenantCode，旧数据中的数值字段无法推断租户编码）
+                                String tenantCode = null;
+                                if (cfg.containsKey("tenantCode") && cfg.get("tenantCode") != null) {
+                                    tenantCode = cfg.get("tenantCode").toString();
+                                } else if (cfg.containsKey("tenantCodes") && cfg.get("tenantCodes") != null) {
                                     @SuppressWarnings("unchecked")
-                                    List<?> oldList = (List<?>) cfg.get("tenantIds");
-                                    if (!oldList.isEmpty()) {
-                                        Object tid = oldList.get(0);
-                                        tenantId = tid instanceof Number ? ((Number) tid).longValue() : Long.parseLong(tid.toString());
+                                    List<?> oldList = (List<?>) cfg.get("tenantCodes");
+                                    if (!oldList.isEmpty() && oldList.get(0) != null) {
+                                        tenantCode = oldList.get(0).toString();
                                     }
                                 }
-                                dto.setTenantId(tenantId);
+                                dto.setTenantCode(tenantCode);
                                 // 恢复发起机构ID（机构相关审批）
                                 Object sourceOrgId = cfg.get("sourceOrgId");
                                 if (sourceOrgId != null) {
-                                    dto.setSourceOrgId(sourceOrgId instanceof Number ? ((Number) sourceOrgId).longValue() : Long.parseLong(sourceOrgId.toString()));
+                                    dto.setSourceOrgId(sourceOrgId.toString());
                                 }
                                 dynamicHandlerMap.put(dto.getNodeKey(), dto);
                             }
@@ -2029,11 +2108,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         new TypeReference<Map<String, Object>>() {});
                 if (extraData != null && extraData.containsKey("nodeTenants")) {
                     @SuppressWarnings("unchecked")
-                    List<Long> nodeTenants = objectMapper.convertValue(extraData.get("nodeTenants"),
-                            new TypeReference<List<Long>>() {});
+                    List<String> nodeTenants = objectMapper.convertValue(extraData.get("nodeTenants"),
+                            new TypeReference<List<String>>() {});
                     nodeTenantsThreadLocal.set(nodeTenants != null ? nodeTenants : new ArrayList<>());
                     System.out.println("===== [多租户审批] 审批时恢复租户列表 =====");
-                    System.out.println("  租户IDs: " + nodeTenantsThreadLocal.get());
+                    System.out.println("  租户Codes: " + nodeTenantsThreadLocal.get());
                     return;
                 }
             } catch (Exception e) {
@@ -2067,7 +2146,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         for (Map<String, Object> cfg : configs) {
                             Object sourceOrgId = cfg.get("sourceOrgId");
                             if (sourceOrgId != null) {
-                                Long orgId = sourceOrgId instanceof Number ? ((Number) sourceOrgId).longValue() : Long.parseLong(sourceOrgId.toString());
+                                String orgId = sourceOrgId.toString();
                                 nodeSourceOrgIdThreadLocal.set(orgId);
                                 System.out.println("===== [机构相关审批] 审批时恢复发起机构ID: " + orgId + " =====");
                                 return;
@@ -2083,7 +2162,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public void cancelFlow(Long instanceId, Long userId) {
+    public void cancelFlow(String instanceId, Long userId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             throw new RuntimeException("流程实例不存在");
@@ -2117,7 +2196,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public void terminateFlow(Long instanceId, Long userId) {
+    public void terminateFlow(String instanceId, Long userId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             throw new RuntimeException("流程实例不存在");
@@ -2135,7 +2214,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public String rollbackFlow(Long instanceId, Long userId) {
+    public String rollbackFlow(String instanceId, Long userId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             throw new RuntimeException("流程实例不存在");
@@ -2159,7 +2238,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             throw new RuntimeException("等待当前节点[" + executingNodeNames + "]逻辑执行完成后再回退");
         }
 
-        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
         if (flow == null) {
             throw new RuntimeException("流程定义不存在");
         }
@@ -2169,13 +2248,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         Map<String, FlowNodeConfig> nodeIdMap = new HashMap<>();
         List<FlowNodeConfig> allNodes = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                        .eq(FlowNodeConfig::getFlowCode, instance.getFlowCode())
                         .orderByAsc(FlowNodeConfig::getSort)
         );
         for (FlowNodeConfig node : allNodes) {
             nodeKeyMap.put(node.getNodeKey(), node);
-            if (StringUtils.hasText(node.getUuid())) {
-                nodeIdMap.put(node.getUuid(), node);
+            if (StringUtils.hasText(node.getNodeId())) {
+                nodeIdMap.put(node.getNodeId(), node);
             }
         }
         if (StringUtils.hasText(flow.getFlowJson())) {
@@ -2267,7 +2346,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             if (subsequentNodeKeys.contains(task.getNodeKey())) {
                 // 【修复】必须用 LambdaUpdateWrapper，否则 handlerId=null 不会清空数据库字段
                 LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
-                        .eq(FlowTask::getId, task.getId())
+                        .eq(FlowTask::getTaskId, task.getTaskId())
                         .eq(FlowTask::getDeleted, 0)
                         .set(FlowTask::getStatus, 5)
                         .set(FlowTask::getHandlerId, null)
@@ -2279,14 +2358,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 logService.saveLog(instanceId, task.getHandlerId(), task.getHandlerName(),
                         FlowOperationType.ROLLBACK.getCode(),
                         "审批节点[" + task.getNodeName() + "]因回退操作被撤销");
-                System.out.println("rollbackFlow - 撤销后续任务: taskId=" + task.getId() + ", node=" + task.getNodeName());
+                System.out.println("rollbackFlow - 撤销后续任务: taskId=" + task.getTaskId() + ", node=" + task.getNodeName());
             }
         }
 
         // Step 1b: 将当前审批节点本身也重置为"待处理"，清除处理人、操作、执行时间
         if (currentPendingTask != null && FlowNodeType.APPROVE.getCode().equals(currentPendingTask.getNodeType())) {
             LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
-                    .eq(FlowTask::getId, currentPendingTask.getId())
+                    .eq(FlowTask::getTaskId, currentPendingTask.getTaskId())
                     .eq(FlowTask::getDeleted, 0)
                     .set(FlowTask::getStatus, 0)
                     .set(FlowTask::getHandlerId, null)
@@ -2305,7 +2384,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             logService.saveLog(instanceId, userId, operatorName,
                     FlowOperationType.ROLLBACK.getCode(),
                     "审批节点[" + currentPendingTask.getNodeName() + "]被回退至待处理状态（由" + operatorName + "操作）");
-            System.out.println("rollbackFlow - 重置当前节点为待处理: taskId=" + currentPendingTask.getId() + ", node=" + currentPendingTask.getNodeName());
+            System.out.println("rollbackFlow - 重置当前节点为待处理: taskId=" + currentPendingTask.getTaskId() + ", node=" + currentPendingTask.getNodeName());
         }
 
         // Step 2: 将所有前置节点的任务重置为"待处理"
@@ -2319,7 +2398,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             if (!predTasks.isEmpty()) {
                 for (FlowTask task : predTasks) {
                     LambdaUpdateWrapper<FlowTask> updateWrapper = new LambdaUpdateWrapper<FlowTask>()
-                            .eq(FlowTask::getId, task.getId())
+                            .eq(FlowTask::getTaskId, task.getTaskId())
                             .eq(FlowTask::getDeleted, 0)
                             .set(FlowTask::getStatus, 0)
                             .set(FlowTask::getAction, null)
@@ -2329,7 +2408,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     logService.saveLog(instanceId, task.getHandlerId(), task.getHandlerName(),
                             FlowOperationType.ROLLBACK.getCode(),
                             "审批节点[" + task.getNodeName() + "]被回退至待处理状态（由" + operatorName + "操作）");
-                    System.out.println("rollbackFlow - 重置任务为待处理: taskId=" + task.getId() + ", node=" + task.getNodeName());
+                    System.out.println("rollbackFlow - 重置任务为待处理: taskId=" + task.getTaskId() + ", node=" + task.getNodeName());
                 }
             } else {
                 // 无任务记录时创建新的待处理任务
@@ -2351,13 +2430,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     /**
-     * 根据角色ID获取第一个成员用户
+     * 根据角色编码获取第一个成员用户
      */
-    private SysUser getFirstUserByRoleId(Long roleId, Long tenantId) {
+    private SysUser getFirstUserByRoleCode(String roleCode, String tenantCode) {
         LambdaQueryWrapper<SysUserRole> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUserRole::getRoleId, roleId);
-        if (tenantId != null) {
-            queryWrapper.eq(SysUserRole::getTenantId, tenantId);
+        queryWrapper.eq(SysUserRole::getRoleCode, roleCode);
+        if (tenantCode != null && !tenantCode.trim().isEmpty()) {
+            queryWrapper.eq(SysUserRole::getTenantCode, tenantCode);
         }
         List<SysUserRole> userRoles = sysUserRoleMapper.selectList(queryWrapper);
         if (userRoles == null || userRoles.isEmpty()) {
@@ -2371,12 +2450,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
      */
     private void createRollbackTask(FlowInstance instance, FlowNodeConfig node, SysUser operator) {
         FlowTask task = new FlowTask();
-        task.setInstanceId(instance.getId());
+        task.setTaskId(UUID.randomUUID().toString().replace("-", ""));
+        task.setInstanceId(instance.getInstanceId());
         task.setNodeKey(node.getNodeKey());
         task.setNodeName(node.getNodeName());
         task.setNodeType(node.getNodeType());
         task.setStatus(0); // 待处理
-        task.setTenantId(instance.getTenantId());
+        task.setTenantCode(instance.getTenantCode());
 
         // 设置处理人
         if (StringUtils.hasText(node.getHandlerType()) && StringUtils.hasText(node.getHandlerIds())) {
@@ -2390,16 +2470,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     if (handler != null) task.setHandlerName(handler.getUsername());
                 } catch (NumberFormatException ignored) {}
             } else if ("role".equals(node.getHandlerType())) {
-                // handlerIds 为逗号分隔的角色ID，取第一个
-                String firstRoleId = node.getHandlerIds().split(",")[0].trim();
-                try {
-                    Long roleId = Long.parseLong(firstRoleId);
-                    SysUser roleUser = getFirstUserByRoleId(roleId, instance.getTenantId());
-                    if (roleUser != null) {
-                        task.setHandlerId(roleUser.getId());
-                        task.setHandlerName(roleUser.getUsername());
-                    }
-                } catch (NumberFormatException ignored) {}
+                // handlerIds 为逗号分隔的角色编码，取第一个
+                String firstRoleCode = node.getHandlerIds().split(",")[0].trim();
+                SysUser roleUser = getFirstUserByRoleCode(firstRoleCode, instance.getTenantCode());
+                if (roleUser != null) {
+                    task.setHandlerId(roleUser.getId());
+                    task.setHandlerName(roleUser.getUsername());
+                }
             } else if ("dynamic".equals(node.getHandlerType()) || "role_dynamic_user".equals(node.getHandlerType())) {
                 // 动态处理人：从 ThreadLocal 中获取（发起时已存过）
                 Map<String, DynamicHandlerDTO> dynamicMap = dynamicHandlerThreadLocal.get();
@@ -2408,7 +2485,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     if (dto != null) {
                         task.setHandlerId(dto.getHandlerId());
                         task.setHandlerName(dto.getHandlerName());
-                        task.setTenantId(dto.getTenantId());
+                        task.setTenantCode(dto.getTenantCode());
                         task.setSourceOrgId(dto.getSourceOrgId());
                     }
                 }
@@ -2418,12 +2495,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         flowTaskMapper.insert(task);
         Long opId = operator != null ? operator.getId() : null;
         String opName = operator != null ? operator.getUsername() : "管理员";
-        logService.saveLog(instance.getId(), opId, opName,
+        logService.saveLog(instance.getInstanceId(), opId, opName,
                 FlowOperationType.ROLLBACK.getCode(), "回退后为节点[" + node.getNodeName() + "]创建待处理任务");
     }
 
     @Override
-    public IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, String tenantCode, Long flowId, String typeCode, String currentNodeKey, Integer pageNum, Integer pageSize) {
+    public IPage<FlowInstanceVO> myInitiated(Long userId, String moduleCode, String tenantCode, String flowCode, String typeCode, String currentNodeKey, Integer pageNum, Integer pageSize) {
         Page<FlowInstance> page = new Page<>(pageNum, pageSize);
 
         LambdaQueryWrapper<FlowInstance> wrapper = new LambdaQueryWrapper<FlowInstance>()
@@ -2431,15 +2508,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 .eq(FlowInstance::getDeleted, 0)
                 .orderByDesc(FlowInstance::getCreateTime);
 
-        if (flowId != null) {
-            wrapper.eq(FlowInstance::getFlowId, flowId);
+        if (flowCode != null) {
+            wrapper.eq(FlowInstance::getFlowCode, flowCode);
         }
 
         if (tenantCode != null && !tenantCode.isEmpty()) {
-            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-            if (tenant != null) {
-                wrapper.eq(FlowInstance::getTenantId, tenant.getId());
-            }
+            wrapper.eq(FlowInstance::getTenantCode, tenantCode);
         }
 
         // 按当前审批节点过滤
@@ -2453,7 +2527,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         if (moduleCode != null && !moduleCode.isEmpty()) {
             List<FlowInstance> filteredList = new ArrayList<>();
             for (FlowInstance inst : instanceList) {
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 if (flow != null && moduleCode.equals(flow.getModuleCode())) {
                     filteredList.add(inst);
                 }
@@ -2463,18 +2537,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         // 按资产类型编码过滤
         if (typeCode != null && !typeCode.isEmpty()) {
-            AssetType assetType = assetTypeMapper.selectOne(new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
-            if (assetType != null) {
-                Long targetAssetTypeId = assetType.getId();
-                List<FlowInstance> filteredList = new ArrayList<>();
-                for (FlowInstance inst : instanceList) {
-                    FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
-                    if (flow != null && targetAssetTypeId.equals(flow.getAssetTypeId())) {
-                        filteredList.add(inst);
-                    }
+            List<FlowInstance> filteredList = new ArrayList<>();
+            for (FlowInstance inst : instanceList) {
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
+                if (flow != null && typeCode.equals(flow.getAssetTypeId())) {
+                    filteredList.add(inst);
                 }
-                instanceList = filteredList;
             }
+            instanceList = filteredList;
         }
 
         List<FlowInstanceVO> voList = new ArrayList<>();
@@ -2482,7 +2552,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             FlowInstanceVO vo = new FlowInstanceVO();
             BeanUtils.copyProperties(inst, vo);
 
-            FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+            FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
             if (flow != null) {
                 vo.setFlowName(flow.getFlowName());
                 if (moduleCode != null && !moduleCode.isEmpty() && !moduleCode.equals(flow.getModuleCode())) {
@@ -2503,7 +2573,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             FlowTask latestTask = flowTaskMapper.selectOne(
                     new LambdaQueryWrapper<FlowTask>()
-                            .eq(FlowTask::getInstanceId, inst.getId())
+                            .eq(FlowTask::getInstanceId, inst.getInstanceId())
                             .eq(FlowTask::getDeleted, 0)
                             .orderByDesc(FlowTask::getCreateTime)
                             .last("LIMIT 1")
@@ -2515,14 +2585,14 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             if (inst.getStatus() == FlowInstanceStatus.RUNNING.getCode() && inst.getCurrentNodeKey() != null) {
                 FlowNodeConfig currentNode = flowNodeConfigMapper.selectOne(
                         new LambdaQueryWrapper<FlowNodeConfig>()
-                                .eq(FlowNodeConfig::getFlowId, inst.getFlowId())
+                                .eq(FlowNodeConfig::getFlowCode, inst.getFlowCode())
                                 .eq(FlowNodeConfig::getNodeKey, inst.getCurrentNodeKey())
                 );
                 if (currentNode != null && FlowNodeType.APPROVE.getCode().equals(currentNode.getNodeType())) {
                     vo.setEnableNotify(currentNode.getEnableNotify());
                     vo.setNotifyType(currentNode.getNotifyType());
                     // 填充当前节点数据库主键（用于前端加载节点详情）
-                    vo.setCurrentNodeId(currentNode.getId());
+                    vo.setCurrentNodeId(currentNode.getNodeId());
                 }
             }
 
@@ -2530,7 +2600,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             if (FlowInstanceStatus.RUNNING.getCode().equals(inst.getStatus())) {
                 Long approvedCount = flowTaskMapper.selectCount(
                         new LambdaQueryWrapper<FlowTask>()
-                                .eq(FlowTask::getInstanceId, inst.getId())
+                                .eq(FlowTask::getInstanceId, inst.getInstanceId())
                                 .eq(FlowTask::getNodeType, "approve")
                                 .eq(FlowTask::getStatus, 1)
                                 .eq(FlowTask::getDeleted, 0)
@@ -2551,7 +2621,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, String tenantCode, Long flowId, String typeCode, String nodeKey, Integer pageNum, Integer pageSize) {
+    public IPage<FlowTaskVO> myApproval(Long userId, Integer taskStatus, String moduleCode, String tenantCode, String flowCode, String typeCode, String nodeKey, Integer pageNum, Integer pageSize) {
         Page<FlowTask> page = new Page<>(pageNum, pageSize);
 
         LambdaQueryWrapper<FlowTask> wrapper = new LambdaQueryWrapper<FlowTask>()
@@ -2560,10 +2630,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 .eq(FlowTask::getDeleted, 0);
 
         if (tenantCode != null && !tenantCode.isEmpty()) {
-            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-            if (tenant != null) {
-                wrapper.and(w -> w.eq(FlowTask::getTenantId, tenant.getId()).or().isNull(FlowTask::getTenantId));
-            }
+            wrapper.and(w -> w.eq(FlowTask::getTenantCode, tenantCode).or().isNull(FlowTask::getTenantCode));
         }
         // 按审批节点过滤
         if (StringUtils.hasText(nodeKey)) {
@@ -2575,14 +2642,10 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         List<FlowTask> taskList = taskPage.getRecords();
 
         // 按模块/流程/资产类型过滤（用于前端筛选展示）
-        if ((moduleCode != null && !moduleCode.isEmpty()) || (tenantCode != null && !tenantCode.isEmpty()) || flowId != null || (typeCode != null && !typeCode.isEmpty())) {
+        if ((moduleCode != null && !moduleCode.isEmpty()) || (tenantCode != null && !tenantCode.isEmpty()) || flowCode != null || (typeCode != null && !typeCode.isEmpty())) {
             AssetType typeFilterAssetType = null;
             if (typeCode != null && !typeCode.isEmpty()) {
                 typeFilterAssetType = assetTypeMapper.selectOne(new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
-            }
-            SysTenant tenantFilter = null;
-            if (tenantCode != null && !tenantCode.isEmpty()) {
-                tenantFilter = sysTenantService.getByTenantCode(tenantCode);
             }
             List<FlowTask> filteredTasks = new ArrayList<>();
             for (FlowTask t : taskList) {
@@ -2591,22 +2654,22 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     continue;
                 }
                 // 多租户审批节点过滤：有效租户 = 任务自己的租户 > 实例的租户
-                Long effectiveTenantId = t.getTenantId();
-                if (effectiveTenantId == null) {
-                    effectiveTenantId = inst.getTenantId();
+                String effectiveTenantCode = t.getTenantCode();
+                if (effectiveTenantCode == null) {
+                    effectiveTenantCode = inst.getTenantCode();
                 }
-                if (tenantFilter != null && !tenantFilter.getId().equals(effectiveTenantId)) {
+                if (tenantCode != null && !tenantCode.isEmpty() && (effectiveTenantCode == null || !tenantCode.equals(effectiveTenantCode))) {
                     continue;
                 }
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 if (flow != null) {
                     if (moduleCode != null && !moduleCode.isEmpty() && !moduleCode.equals(flow.getModuleCode())) {
                         continue;
                     }
-                    if (flowId != null && !flowId.equals(flow.getId())) {
+                    if (flowCode != null && !flowCode.equals(flow.getFlowCode())) {
                         continue;
                     }
-                    if (typeFilterAssetType != null && !typeFilterAssetType.getId().equals(flow.getAssetTypeId())) {
+                    if (typeFilterAssetType != null && !typeFilterAssetType.getTypeCode().equals(flow.getAssetTypeId())) {
                         continue;
                     }
                     filteredTasks.add(t);
@@ -2621,7 +2684,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // moduleCode 从审批节点配置（flow_node_config.module_code）中读取，而非 flow_definition.module_code。
         List<FlowTask> finalTaskList = new ArrayList<>();
         for (FlowTask t : taskList) {
-            Long srcOrg = t.getSourceOrgId();
+            String srcOrg = t.getSourceOrgId();
             if (srcOrg == null) {
                 // 无机构要求，任何人都能看（已在任务分配时过滤过，这里安全放行）
                 finalTaskList.add(t);
@@ -2634,13 +2697,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             // 从审批节点的 module_code 读取，而非 flow_definition.module_code
             FlowNodeConfig nodeConfig = flowNodeConfigMapper.selectOne(
                     new LambdaQueryWrapper<FlowNodeConfig>()
-                            .eq(FlowNodeConfig::getFlowId, inst.getFlowId())
+                            .eq(FlowNodeConfig::getFlowCode, inst.getFlowCode())
                             .eq(FlowNodeConfig::getNodeKey, t.getNodeKey()));
             String nodeModuleCode = (nodeConfig != null) ? nodeConfig.getModuleCode() : null;
-            Long effectiveTenantId = t.getTenantId() != null ? t.getTenantId() : inst.getTenantId();
+            String effectiveTenantCode = t.getTenantCode() != null ? t.getTenantCode() : inst.getTenantCode();
             // 调用独立方法判断机构层级权限（便于后续扩展）
             boolean authorized = sysUserService.isUserAuthorizedForOrgLevel(
-                    userId, nodeModuleCode, effectiveTenantId, srcOrg);
+                    userId, nodeModuleCode, effectiveTenantCode, srcOrg);
             if (authorized) {
                 finalTaskList.add(t);
             }
@@ -2654,21 +2717,21 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
             if (inst != null) {
-                vo.setFlowId(inst.getFlowId());
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                vo.setFlowCode(inst.getFlowCode());
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 vo.setFlowName(flow != null ? flow.getFlowName() : "");
                 vo.setInstanceName(inst.getInstanceName());
 
                 SysUser applicant = sysUserService.getById(inst.getApplicantId());
                 vo.setApplicantName(applicant != null ? applicant.getUsername() : "");
 
-                // 填充租户名称（优先用任务自己的租户ID，其次用实例的租户ID）
-                Long effectiveTenantId = t.getTenantId();
-                if (effectiveTenantId == null || effectiveTenantId == 0) {
-                    effectiveTenantId = inst.getTenantId();
+                // 填充租户名称（优先用任务自己的租户编码，其次用实例的租户编码）
+                String effectiveTenantCode = t.getTenantCode();
+                if (effectiveTenantCode == null || effectiveTenantCode.trim().isEmpty()) {
+                    effectiveTenantCode = inst.getTenantCode();
                 }
-                if (effectiveTenantId != null) {
-                    SysTenant tenant = sysTenantService.getById(effectiveTenantId);
+                if (effectiveTenantCode != null && !effectiveTenantCode.trim().isEmpty()) {
+                    SysTenant tenant = sysTenantService.getByTenantCode(effectiveTenantCode);
                     vo.setTenantName(tenant != null ? tenant.getTenantName() : "");
                 }
                 // 填充发起机构名称
@@ -2701,7 +2764,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
     @Override
     public IPage<FlowTaskVO> adminAllTasks(Integer taskStatus, String moduleCode, String tenantCode,
-                                           Long flowId, String flowCode, String typeCode, String nodeKey,
+                                           String flowCode, String typeCode, String nodeKey,
                                            Integer pageNum, Integer pageSize) {
         Page<FlowTask> page = new Page<>(pageNum, pageSize);
 
@@ -2718,10 +2781,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         wrapper.eq(FlowTask::getDeleted, 0);
 
         if (StringUtils.hasText(tenantCode)) {
-            SysTenant tenant = sysTenantService.getByTenantCode(tenantCode);
-            if (tenant != null) {
-                wrapper.and(w -> w.eq(FlowTask::getTenantId, tenant.getId()).or().isNull(FlowTask::getTenantId));
-            }
+            wrapper.and(w -> w.eq(FlowTask::getTenantCode, tenantCode).or().isNull(FlowTask::getTenantCode));
         }
         if (StringUtils.hasText(nodeKey)) {
             wrapper.eq(FlowTask::getNodeKey, nodeKey);
@@ -2731,30 +2791,24 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         IPage<FlowTask> taskPage = flowTaskMapper.selectPage(page, wrapper);
         List<FlowTask> taskList = taskPage.getRecords();
 
-        // 解析 flowId / flowCode，并按模块/流程/资产类型过滤
-        Long resolvedFlowId = resolveFlowId(flowId, flowCode);
-        if (resolvedFlowId != null || StringUtils.hasText(moduleCode) || StringUtils.hasText(typeCode)) {
+        if (StringUtils.hasText(flowCode) || StringUtils.hasText(moduleCode) || StringUtils.hasText(typeCode)) {
             AssetType typeFilterAssetType = null;
             if (StringUtils.hasText(typeCode)) {
                 typeFilterAssetType = assetTypeMapper.selectOne(
                         new LambdaQueryWrapper<AssetType>().eq(AssetType::getTypeCode, typeCode));
             }
-            SysTenant tenantFilter = null;
-            if (StringUtils.hasText(tenantCode)) {
-                tenantFilter = sysTenantService.getByTenantCode(tenantCode);
-            }
             List<FlowTask> filteredTasks = new ArrayList<>();
             for (FlowTask t : taskList) {
                 FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
                 if (inst == null) continue;
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 if (flow == null) continue;
-                if (resolvedFlowId != null && !resolvedFlowId.equals(inst.getFlowId())) continue;
+                if (StringUtils.hasText(flowCode) && !flowCode.equals(inst.getFlowCode())) continue;
                 if (StringUtils.hasText(moduleCode) && !moduleCode.equals(flow.getModuleCode())) continue;
-                if (typeFilterAssetType != null && !typeFilterAssetType.getId().equals(flow.getAssetTypeId())) continue;
-                if (StringUtils.hasText(tenantCode) && tenantFilter != null) {
-                    Long effectiveTenantId = t.getTenantId() != null ? t.getTenantId() : inst.getTenantId();
-                    if (effectiveTenantId == null || !effectiveTenantId.equals(tenantFilter.getId())) continue;
+                if (typeFilterAssetType != null && !typeFilterAssetType.getTypeCode().equals(flow.getAssetTypeId())) continue;
+                if (StringUtils.hasText(tenantCode)) {
+                    String effectiveTenantCode = t.getTenantCode() != null ? t.getTenantCode() : inst.getTenantCode();
+                    if (effectiveTenantCode == null || !tenantCode.equals(effectiveTenantCode)) continue;
                 }
                 filteredTasks.add(t);
             }
@@ -2768,20 +2822,20 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
             FlowInstance inst = flowInstanceMapper.selectById(t.getInstanceId());
             if (inst != null) {
-                vo.setFlowId(inst.getFlowId());
-                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowId());
+                vo.setFlowCode(inst.getFlowCode());
+                FlowDefinition flow = flowDefinitionMapper.selectById(inst.getFlowCode());
                 vo.setFlowName(flow != null ? flow.getFlowName() : "");
                 vo.setInstanceName(inst.getInstanceName());
 
                 SysUser applicant = sysUserService.getById(inst.getApplicantId());
                 vo.setApplicantName(applicant != null ? applicant.getUsername() : "");
 
-                Long effectiveTenantId = t.getTenantId();
-                if (effectiveTenantId == null || effectiveTenantId == 0) {
-                    effectiveTenantId = inst.getTenantId();
+                String effectiveTenantCode = t.getTenantCode();
+                if (effectiveTenantCode == null || effectiveTenantCode.trim().isEmpty()) {
+                    effectiveTenantCode = inst.getTenantCode();
                 }
-                if (effectiveTenantId != null) {
-                    SysTenant tenant = sysTenantService.getById(effectiveTenantId);
+                if (effectiveTenantCode != null && !effectiveTenantCode.trim().isEmpty()) {
+                    SysTenant tenant = sysTenantService.getByTenantCode(effectiveTenantCode);
                     vo.setTenantName(tenant != null ? tenant.getTenantName() : "");
                 }
                 if (t.getSourceOrgId() != null) {
@@ -2808,13 +2862,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public FlowDetailVO getFlowDetail(Long instanceId) {
+    public FlowDetailVO getFlowDetail(String instanceId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             return null;
         }
 
-        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowId());
+        FlowDefinition flow = flowDefinitionMapper.selectById(instance.getFlowCode());
         SysUser applicant = sysUserService.getById(instance.getApplicantId());
 
         FlowDetailVO detailVO = new FlowDetailVO();
@@ -2835,7 +2889,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         List<FlowInstanceParamVO> flowParamVOList = new ArrayList<>();
         FlowInstanceParam[] instanceParams = flowInstanceParamMapper.findByInstanceId(instanceId);
         if (instanceParams != null && instanceParams.length > 0 && flow != null) {
-            List<FlowTemplateParam> templateParams = flowTemplateParamMapper.findByTemplateId(flow.getId());
+            List<FlowTemplateParam> templateParams = flowTemplateParamMapper.findByTemplateId(flow.getFlowCode());
             final Map<String, String> paramNameMap = new HashMap<>();
             if (templateParams != null && !templateParams.isEmpty()) {
                 for (FlowTemplateParam tp : templateParams) {
@@ -2855,7 +2909,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 获取节点配置和任务
         List<FlowNodeConfig> nodeConfigs = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                        .eq(FlowNodeConfig::getFlowCode, instance.getFlowCode())
                         .orderByAsc(FlowNodeConfig::getSort)
         );
 
@@ -2883,11 +2937,13 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         // 解析连线信息
         List<FlowLine> flowLines = new ArrayList<>();
+        Map<String, String> flowJsonNodeAliasMap = new HashMap<>();
         if (flow != null && StringUtils.hasText(flow.getFlowJson())) {
             try {
                 FlowJsonData flowJsonData = objectMapper.readValue(flow.getFlowJson(), FlowJsonData.class);
                 if (flowJsonData != null && flowJsonData.getLines() != null) {
                     flowLines = flowJsonData.getLines();
+                    flowJsonNodeAliasMap = buildFlowJsonNodeAliasMap(flowJsonData);
                 }
             } catch (Exception e) {
                 log.warn("解析 flowJson 失败", e);
@@ -2899,10 +2955,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         Map<String, FlowNodeConfig> nodeIdMap = new HashMap<>();
         for (FlowNodeConfig node : nodeConfigs) {
             nodeKeyMap.put(node.getNodeKey(), node);
-            if (StringUtils.hasText(node.getUuid())) {
-                nodeIdMap.put(node.getUuid(), node);
+            if (StringUtils.hasText(node.getNodeId())) {
+                nodeIdMap.put(node.getNodeId(), node);
             }
         }
+        mergeFlowJsonAliasesIntoNodeIdMap(nodeKeyMap, nodeIdMap, flowJsonNodeAliasMap);
+        detailVO.setLineList(buildFlowLineDetailList(flowLines, nodeKeyMap, nodeIdMap));
 
         // 【优化】根据拓扑排序重组节点列表，显示并行关系
         List<FlowNodeDetailVO> nodeDetailList = buildNodeDetailListWithParallelism(
@@ -2916,12 +2974,46 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         return detailVO;
     }
 
+    private List<FlowLineDetailVO> buildFlowLineDetailList(List<FlowLine> flowLines,
+            Map<String, FlowNodeConfig> nodeKeyMap, Map<String, FlowNodeConfig> nodeIdMap) {
+        List<FlowLineDetailVO> lineDetails = new ArrayList<>();
+        if (flowLines == null || flowLines.isEmpty()) {
+            return lineDetails;
+        }
+        for (FlowLine line : flowLines) {
+            String fromRaw = line.getFromNode();
+            String toRaw = line.getToNode();
+            if (!StringUtils.hasText(fromRaw) || !StringUtils.hasText(toRaw)) {
+                continue;
+            }
+            FlowNodeConfig fromNode = nodeIdMap.get(fromRaw);
+            if (fromNode == null) {
+                fromNode = nodeKeyMap.get(fromRaw);
+            }
+            FlowNodeConfig toNode = nodeIdMap.get(toRaw);
+            if (toNode == null) {
+                toNode = nodeKeyMap.get(toRaw);
+            }
+            if (fromNode == null || toNode == null) {
+                continue;
+            }
+
+            FlowLineDetailVO vo = new FlowLineDetailVO();
+            vo.setFromNodeKey(fromNode.getNodeKey());
+            vo.setFromNodeName(fromNode.getNodeName());
+            vo.setToNodeKey(toNode.getNodeKey());
+            vo.setToNodeName(toNode.getNodeName());
+            lineDetails.add(vo);
+        }
+        return lineDetails;
+    }
+
     /**
      * 【优化】根据拓扑排序和并行关系构建节点详情列表
      * 1. 过滤掉逻辑与/逻辑或节点（不展示）
      * 2. 按拓扑分层，同一层级的审批节点并排显示
      * 3. end 节点：没有任务时显示"未执行"，有 status=1 任务才显示"已完成"
-     * 4. 使用 nodeKey 作为唯一标识（优先 nodeKey，空时用 uuid），保证 start/end 等空 nodeKey 节点不冲突
+     * 4. 使用 nodeKey 作为唯一标识（优先 nodeKey，空时用 nodeId），保证 start/end 等空 nodeKey 节点不冲突
      * 5. 【修复】使用 Kahn 正向 BFS + 最长路径计算 level；过滤逻辑节点后重映射层级，使层级连续
      *    示例（用户流程）：start=0, logic_1=1, logic_2=1, logic_3=2（含被过滤的 and 的层级）,
      *    and 被过滤后不占层级，end=3
@@ -2946,12 +3038,12 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         && !FlowNodeType.LOGIC_OR.getCode().equals(n.getNodeType()))
                 .collect(Collectors.toList());
 
-        // 获取节点唯一标识：优先 nodeKey，空时用 uuid，保证 start/end 等节点不冲突
+        // 获取节点唯一标识：优先 nodeKey，空时用 nodeId，保证 start/end 等节点不冲突
         java.util.function.Function<FlowNodeConfig, String> getNodeId = node -> {
             if (node.getNodeKey() != null && !node.getNodeKey().isEmpty()) {
                 return node.getNodeKey();
             }
-            return node.getUuid();
+            return node.getNodeId();
         };
 
         // 构建 id -> nodeConfig 反查表
@@ -3109,9 +3201,6 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                         if (t.getExecuteTime() != null && latestTask.getExecuteTime() != null
                                 && t.getExecuteTime().after(latestTask.getExecuteTime())) {
                             latestTask = t;
-                        } else if (t.getId() != null && latestTask.getId() != null
-                                && t.getId() > latestTask.getId()) {
-                            latestTask = t;
                         }
                     }
                     FlowTask firstTask = nodeTasks.get(0);
@@ -3185,7 +3274,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         return nodeDetailList;
     }
 
-    private void createAutoTask(Long instanceId, FlowNodeConfig nodeConfig, String action, String comment) {
+    private void createAutoTask(String instanceId, FlowNodeConfig nodeConfig, String action, String comment) {
         // 幂等检查：如果该实例该节点已有自动任务，不再重复创建
         Long existingCount = flowTaskMapper.selectCount(
                 new LambdaQueryWrapper<FlowTask>()
@@ -3198,6 +3287,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
 
         FlowTask task = new FlowTask();
+        task.setTaskId(UUID.randomUUID().toString().replace("-", ""));
         task.setInstanceId(instanceId);
         task.setNodeKey(nodeConfig.getNodeKey());
         task.setNodeName(nodeConfig.getNodeName());
@@ -3211,7 +3301,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         flowTaskMapper.insert(task);
     }
 
-    private void fillTextNodeCustomFields(Long instanceId, List<FlowNodeConfig> nodeConfigs) {
+    private void fillTextNodeCustomFields(String instanceId, List<FlowNodeConfig> nodeConfigs) {
         try {
             FlowNodeConfig textNode = nodeConfigs.stream()
                     .filter(node -> FlowNodeType.TEXT.getCode().equals(node.getNodeType()))
@@ -3264,21 +3354,21 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     /**
      * 判断角色是否为机构相关（org_related=1）
      */
-    private boolean isOrgRelatedRole(String roleId) {
-        if (!StringUtils.hasText(roleId)) return false;
-        SysRole role = sysRoleService.getById(Long.parseLong(roleId.trim()));
+    private boolean isOrgRelatedRole(String roleCode) {
+        if (!StringUtils.hasText(roleCode)) return false;
+        SysRole role = sysRoleService.getById(roleCode.trim());
         return role != null && Boolean.TRUE.equals(role.getOrgRelated());
     }
 
-    private String getRealHandlerIds(FlowNodeConfig nodeConfig, Long tenantId, Map<String, DynamicHandlerDTO> dynamicHandlerMap) {
-        return getRealHandlerIdsWithOrgFilter(nodeConfig, tenantId, null, dynamicHandlerMap);
+    private String getRealHandlerIds(FlowNodeConfig nodeConfig, String tenantCode, Map<String, DynamicHandlerDTO> dynamicHandlerMap) {
+        return getRealHandlerIdsWithOrgFilter(nodeConfig, tenantCode, null, dynamicHandlerMap);
     }
 
     /**
      * 获取符合条件的处理人ID，支持机构层级过滤
      * @param sourceOrgId 发起机构ID（机构相关审批时有效）
      */
-    private String getRealHandlerIdsWithOrgFilter(FlowNodeConfig nodeConfig, Long tenantId, Long sourceOrgId,
+    private String getRealHandlerIdsWithOrgFilter(FlowNodeConfig nodeConfig, String tenantCode, String sourceOrgId,
             Map<String, DynamicHandlerDTO> dynamicHandlerMap) {
         if (!StringUtils.hasText(nodeConfig.getHandlerType())) {
             return "";
@@ -3307,11 +3397,11 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 if (!StringUtils.hasText(roleId)) continue;
 
                 LambdaQueryWrapper<SysUserRole> queryWrapper = new LambdaQueryWrapper<>();
-                queryWrapper.eq(SysUserRole::getRoleId, Long.parseLong(roleId.trim()));
+                queryWrapper.eq(SysUserRole::getRoleCode, roleId.trim());
 
                 // 多租户模块需要按租户筛选角色成员
-                if (isMultiTenantModule(nodeConfig.getModuleCode()) && tenantId != null) {
-                    queryWrapper.eq(SysUserRole::getTenantId, tenantId);
+                if (isMultiTenantModule(nodeConfig.getModuleCode()) && tenantCode != null && !tenantCode.trim().isEmpty()) {
+                    queryWrapper.eq(SysUserRole::getTenantCode, tenantCode);
                 }
 
                 List<SysUserRole> userRoles = sysUserRoleMapper.selectList(queryWrapper);
@@ -3319,7 +3409,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     // 机构层级过滤：调用独立方法判断（便于后续扩展）
                     if (sourceOrgId != null) {
                         boolean authorized = sysUserService.isUserAuthorizedForOrgLevel(
-                                ur.getUserId(), nodeConfig.getModuleCode(), tenantId, sourceOrgId);
+                                ur.getUserId(), nodeConfig.getModuleCode(), tenantCode, sourceOrgId);
                         if (!authorized) {
                             System.out.println("getRealHandlerIds - 用户 " + ur.getUserId() + " 授权机构不在发起机构之上，跳过");
                             continue;
@@ -3338,17 +3428,18 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     /**
      * 获取用户在指定模块/租户下的授权机构ID
      */
-    private Long getUserOrgId(Long userId, String moduleCode, Long tenantId) {
+    private String getUserOrgId(Long userId, String moduleCode, String tenantCode) {
+        String effectiveTenantCode = isMultiTenantModule(moduleCode) ? tenantCode : "";
         LambdaQueryWrapper<com.rightmanage.entity.SysUserOrgAuth> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(com.rightmanage.entity.SysUserOrgAuth::getUserId, userId)
                 .eq(com.rightmanage.entity.SysUserOrgAuth::getModuleCode, moduleCode);
-        if (tenantId == null) {
-            wrapper.isNull(com.rightmanage.entity.SysUserOrgAuth::getTenantId);
+        if (effectiveTenantCode == null) {
+            wrapper.isNull(com.rightmanage.entity.SysUserOrgAuth::getTenantCode);
         } else {
-            wrapper.eq(com.rightmanage.entity.SysUserOrgAuth::getTenantId, tenantId);
+            wrapper.eq(com.rightmanage.entity.SysUserOrgAuth::getTenantCode, effectiveTenantCode);
         }
         wrapper.last("limit 1");
-        com.rightmanage.entity.BankOrg org = sysUserService.getAuthorizedOrg(userId, moduleCode, tenantId);
+        com.rightmanage.entity.BankOrg org = sysUserService.getAuthorizedOrg(userId, moduleCode, tenantCode);
         return org != null ? org.getId() : null;
     }
 
@@ -3360,9 +3451,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         StringBuilder names = new StringBuilder();
 
         if ("role".equals(nodeConfig.getHandlerType())) {
-            for (String roleId : handlerIds.split(",")) {
-                if (!StringUtils.hasText(roleId)) continue;
-                SysRole role = sysRoleService.getById(Long.parseLong(roleId.trim()));
+            for (String roleCode : handlerIds.split(",")) {
+                if (!StringUtils.hasText(roleCode)) continue;
+                SysRole role = sysRoleService.getById(roleCode.trim());
                 if (role != null) {
                     names.append("角色：").append(role.getRoleName()).append(",");
                 }
@@ -3391,17 +3482,17 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         return "无";
     }
 
-    private void saveFlowInstanceParams(Long instanceId, Long flowId, Map<String, Object> params) {
+    private void saveFlowInstanceParams(String instanceId, String flowCode, Map<String, Object> params) {
         try {
-            List<FlowTemplateParam> templateParams = flowTemplateParamMapper.findByTemplateId(flowId);
+            List<FlowTemplateParam> templateParams = flowTemplateParamMapper.findByTemplateId(flowCode);
             if (templateParams == null || templateParams.isEmpty()) {
                 return;
             }
 
-            Map<String, Long> paramIdMap = new HashMap<>();
+            Map<String, String> paramIdMap = new HashMap<>();
             Map<String, FlowTemplateParam> paramConfigMap = new HashMap<>();
             for (FlowTemplateParam tp : templateParams) {
-                paramIdMap.put(tp.getParamCode(), tp.getId());
+                paramIdMap.put(tp.getParamCode(), tp.getDefinitionParamId());
                 paramConfigMap.put(tp.getParamCode(), tp);
             }
 
@@ -3412,8 +3503,9 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
                 if (paramIdMap.containsKey(paramCode) && paramValue != null) {
                     FlowInstanceParam ip = new FlowInstanceParam();
+                    ip.setInstanceParamId(UUID.randomUUID().toString().replace("-", ""));
                     ip.setInstanceId(instanceId);
-                    ip.setTemplateParamId(paramIdMap.get(paramCode));
+                    ip.setDefinitionParamId(paramIdMap.get(paramCode));
                     ip.setParamCode(paramCode);
                     ip.setParamValue(paramValue.toString());
 
@@ -3448,7 +3540,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
     }
 
     @Override
-    public String triggerNodeNotify(Long instanceId, Long userId) {
+    public String triggerNodeNotify(String instanceId, Long userId) {
         FlowInstance instance = flowInstanceMapper.selectById(instanceId);
         if (instance == null) {
             return "流程实例不存在";
@@ -3460,7 +3552,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         FlowNodeConfig currentNode = flowNodeConfigMapper.selectOne(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, instance.getFlowId())
+                        .eq(FlowNodeConfig::getFlowCode, instance.getFlowCode())
                         .eq(FlowNodeConfig::getNodeKey, instance.getCurrentNodeKey())
         );
 
@@ -3478,7 +3570,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
         // 恢复动态处理人和多租户审批节点租户列表
         Map<String, DynamicHandlerDTO> dynamicHandlerMap = new HashMap<>();
-        List<Long> nodeTenants = new ArrayList<>();
+        List<String> nodeTenants = new ArrayList<>();
         if (StringUtils.hasText(instance.getDynamicHandlers())) {
             try {
                 Map<String, Object> extraData = objectMapper.readValue(
@@ -3497,8 +3589,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     }
                     if (extraData.containsKey("nodeTenants")) {
                         @SuppressWarnings("unchecked")
-                        List<Long> nts = objectMapper.convertValue(extraData.get("nodeTenants"),
-                                new TypeReference<List<Long>>() {});
+                        List<String> nts = objectMapper.convertValue(extraData.get("nodeTenants"),
+                                new TypeReference<List<String>>() {});
                         if (nts != null) {
                             nodeTenants = nts;
                         }
@@ -3516,8 +3608,8 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         // 收集通知人（多租户节点：所有选中租户的用户；普通节点：实例租户的用户）
         Set<String> allHandlerIds = new HashSet<>();
         if (isMultiTenantNode && !nodeTenants.isEmpty()) {
-            for (Long tenantId : nodeTenants) {
-                String handlerIds = getRealHandlerIds(currentNode, tenantId, dynamicHandlerMap);
+            for (String tenantCode : nodeTenants) {
+                String handlerIds = getRealHandlerIds(currentNode, tenantCode, dynamicHandlerMap);
                 if (StringUtils.hasText(handlerIds)) {
                     for (String hid : handlerIds.split(",")) {
                         if (StringUtils.hasText(hid)) {
@@ -3527,7 +3619,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                 }
             }
         } else {
-            String handlerIds = getRealHandlerIds(currentNode, instance.getTenantId(), dynamicHandlerMap);
+            String handlerIds = getRealHandlerIds(currentNode, instance.getTenantCode(), dynamicHandlerMap);
             if (StringUtils.hasText(handlerIds)) {
                 for (String hid : handlerIds.split(",")) {
                     if (StringUtils.hasText(hid)) {
@@ -3548,15 +3640,15 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         String tenantInfo;
         if (isMultiTenantNode && !nodeTenants.isEmpty()) {
             String names = nodeTenants.stream().map(tid -> {
-                SysTenant t = sysTenantService.getById(tid);
-                return t != null ? t.getTenantName() : ("ID=" + tid);
+                SysTenant t = sysTenantService.getByTenantCode(tid);
+                return t != null ? t.getTenantName() : ("tenantCode=" + tid);
             }).collect(Collectors.joining("、"));
             tenantInfo = "多租户审批，所选租户: " + names;
-        } else if (instance.getTenantId() != null) {
-            SysTenant tenant = sysTenantService.getById(instance.getTenantId());
+        } else if (instance.getTenantCode() != null) {
+            SysTenant tenant = sysTenantService.getByTenantCode(instance.getTenantCode());
             tenantInfo = tenant != null
-                    ? "租户ID: " + tenant.getId() + "，租户名称: " + tenant.getTenantName()
-                    : "租户ID: " + instance.getTenantId() + "（未找到）";
+                    ? "租户编码: " + tenant.getTenantCode() + "，租户名称: " + tenant.getTenantName()
+                    : "租户编码: " + instance.getTenantCode() + "（未找到）";
         } else {
             tenantInfo = "无";
         }
@@ -3589,29 +3681,29 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
 
     /**
      * 获取角色+动态用户（role_dynamic_user）节点的候选用户列表
-     * 根据 moduleCode + roleIds + tenantId 查出用户，再通过机构层级过滤
+     * 根据 moduleCode + roleIds + tenantCode 查出用户，再通过机构层级过滤
      */
     @Override
     public List<Map<String, Object>> getRoleDynamicUsers(String moduleCode, String roleIds,
-            Long tenantId, Long sourceOrgId) {
+            String tenantCode, String sourceOrgId) {
         if (!StringUtils.hasText(roleIds)) {
             return new java.util.ArrayList<>();
         }
 
-        // 1. 根据角色ID列表查出用户
+        // 1. 根据角色编码列表查出用户
         LambdaQueryWrapper<SysUserRole> queryWrapper = new LambdaQueryWrapper<>();
-        List<Long> roleIdList = new ArrayList<>();
+        List<String> roleCodeList = new ArrayList<>();
         for (String r : roleIds.split(",")) {
             if (StringUtils.hasText(r)) {
-                roleIdList.add(Long.parseLong(r.trim()));
+                roleCodeList.add(r.trim());
             }
         }
-        if (roleIdList.isEmpty()) {
+        if (roleCodeList.isEmpty()) {
             return new ArrayList<>();
         }
-        queryWrapper.in(SysUserRole::getRoleId, roleIdList);
-        if (tenantId != null) {
-            queryWrapper.eq(SysUserRole::getTenantId, tenantId);
+        queryWrapper.in(SysUserRole::getRoleCode, roleCodeList);
+        if (tenantCode != null && !tenantCode.trim().isEmpty()) {
+            queryWrapper.eq(SysUserRole::getTenantCode, tenantCode);
         }
 
         List<SysUserRole> userRoles = sysUserRoleMapper.selectList(queryWrapper);
@@ -3628,7 +3720,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         if (sourceOrgId != null && StringUtils.hasText(moduleCode)) {
             for (Long uid : new ArrayList<>(userIdSet)) {
                 boolean authorized = sysUserService.isUserAuthorizedForOrgLevel(
-                        uid, moduleCode, tenantId, sourceOrgId);
+                        uid, moduleCode, tenantCode, sourceOrgId);
                 if (!authorized) {
                     userIdSet.remove(uid);
                 }
@@ -3663,8 +3755,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             throw new RuntimeException("userId 不能为空");
         }
 
-        // flowCode 优先，解析为 flowId 后再查询
-        Long resolvedFlowId = resolveFlowId(dto.getFlowId(), dto.getFlowCode());
+        String resolvedFlowCode = resolveFlowCode(dto.getFlowCode());
 
         String queryType = dto.getQueryType();
         FlowQueryResultVO<Object> result = new FlowQueryResultVO<>();
@@ -3674,9 +3765,10 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
             IPage<FlowTaskVO> page = myApproval(
                     dto.getUserId(), 0,
                     dto.getModuleCode(), dto.getTenantCode(),
-                    resolvedFlowId, dto.getTypeCode(),
+                    resolvedFlowCode, dto.getTypeCode(),
                     dto.getNodeKey(),
                     dto.getPageNum(), dto.getPageSize());
+            page = applyPendingOrgScopeFilter(page, dto.getOrgCode(), dto.getOrgScope());
             buildResult(result, page);
             return result;
         } else if ("myApproval".equals(queryType)) {
@@ -3684,16 +3776,17 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
                     dto.getUserId(),
                     dto.getTaskStatus() != null ? dto.getTaskStatus() : 1,
                     dto.getModuleCode(), dto.getTenantCode(),
-                    resolvedFlowId, dto.getTypeCode(),
+                    resolvedFlowCode, dto.getTypeCode(),
                     dto.getNodeKey(),
                     dto.getPageNum(), dto.getPageSize());
+            page = applyPendingOrgScopeFilter(page, dto.getOrgCode(), dto.getOrgScope());
             buildResult(result, page);
             return result;
         } else if ("myInitiated".equals(queryType)) {
             IPage<FlowInstanceVO> page = myInitiated(
                     dto.getUserId(),
                     dto.getModuleCode(), dto.getTenantCode(),
-                    resolvedFlowId, dto.getTypeCode(),
+                    resolvedFlowCode, dto.getTypeCode(),
                     dto.getNodeKey(),
                     dto.getPageNum(), dto.getPageSize());
             buildResult(result, page);
@@ -3703,25 +3796,85 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         }
     }
 
-    /**
-     * 根据 flowId 或 flowCode 解析出 flowId
-     * @param flowId 流程定义ID（优先使用）
-     * @param flowCode 流程定义编码（flowId 为空时使用）
-     * @return 流程定义ID，查不到返回 null
-     */
-    private Long resolveFlowId(Long flowId, String flowCode) {
-        if (flowId != null) {
-            return flowId;
+    private IPage<FlowTaskVO> applyPendingOrgScopeFilter(IPage<FlowTaskVO> page, String orgCode, String orgScope) {
+        if (!StringUtils.hasText(orgCode) || !StringUtils.hasText(orgScope)) {
+            return page;
         }
-        if (flowCode != null && !flowCode.isEmpty()) {
-            FlowDefinition def = flowDefinitionMapper.selectOne(
-                    new LambdaQueryWrapper<FlowDefinition>()
-                            .eq(FlowDefinition::getFlowCode, flowCode)
-                            .eq(FlowDefinition::getStatus, 1)
-                            .last("LIMIT 1"));
-            return def != null ? def.getId() : null;
+
+        Set<String> allowedOrgCodes = resolvePendingOrgScopeCodes(orgCode, orgScope);
+        List<FlowTaskVO> originalRecords = page.getRecords() == null ? Collections.emptyList() : page.getRecords();
+        List<FlowTaskVO> filteredRecords = new ArrayList<>();
+
+        for (FlowTaskVO task : originalRecords) {
+            if (!StringUtils.hasText(task.getSourceOrgId())) {
+                filteredRecords.add(task);
+                continue;
+            }
+            if (allowedOrgCodes.contains(task.getSourceOrgId())) {
+                filteredRecords.add(task);
+            }
         }
-        return null;
+
+        Page<FlowTaskVO> filteredPage = new Page<>(page.getCurrent(), page.getSize(), filteredRecords.size());
+        filteredPage.setRecords(filteredRecords);
+        return filteredPage;
+    }
+
+    private Set<String> resolvePendingOrgScopeCodes(String orgCode, String orgScope) {
+        Set<String> orgCodes = new LinkedHashSet<>();
+        if (!StringUtils.hasText(orgCode) || !StringUtils.hasText(orgScope)) {
+            return orgCodes;
+        }
+
+        String normalizedScope = orgScope.trim().toLowerCase(Locale.ROOT);
+        if ("self".equals(normalizedScope)) {
+            orgCodes.add(orgCode.trim());
+            return orgCodes;
+        }
+
+        String tableName = "bmip_000_suborg_cmp_" + yesterdayMonth();
+        if (!tableName.matches("^bmip_000_suborg_cmp_\\d{6}$")) {
+            return orgCodes;
+        }
+
+        String dte = yesterday();
+        List<String> queriedCodes;
+        if ("next".equals(normalizedScope)) {
+            queriedCodes = bankOrgMapper.selectNextLevelOrgCodes(tableName, dte, orgCode.trim());
+        } else if ("all".equals(normalizedScope)) {
+            queriedCodes = bankOrgMapper.selectAllSubOrgCodes(tableName, dte, orgCode.trim());
+        } else {
+            return orgCodes;
+        }
+
+        if (queriedCodes != null) {
+            for (String code : queriedCodes) {
+                if (StringUtils.hasText(code)) {
+                    orgCodes.add(code.trim());
+                }
+            }
+        }
+        return orgCodes;
+    }
+
+    private String yesterday() {
+        return LocalDate.now().minusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE);
+    }
+
+    private String yesterdayMonth() {
+        return LocalDate.now().minusDays(1).format(DateTimeFormatter.ofPattern("yyyyMM"));
+    }
+
+    private String resolveFlowCode(String flowCode) {
+        if (!StringUtils.hasText(flowCode)) {
+            return null;
+        }
+        FlowDefinition def = flowDefinitionMapper.selectOne(
+                new LambdaQueryWrapper<FlowDefinition>()
+                        .eq(FlowDefinition::getFlowCode, flowCode)
+                        .eq(FlowDefinition::getStatus, 1)
+                        .last("LIMIT 1"));
+        return def != null ? def.getFlowCode() : null;
     }
 
     @SuppressWarnings("unchecked")
@@ -3735,3 +3888,7 @@ public class FlowInstanceServiceImpl extends ServiceImpl<FlowInstanceMapper, Flo
         result.setRecords((java.util.List<Object>) page.getRecords());
     }
 }
+
+
+
+

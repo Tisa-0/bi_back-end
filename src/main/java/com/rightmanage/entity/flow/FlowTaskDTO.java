@@ -1,4 +1,4 @@
-package com.rightmanage.entity;
+package com.rightmanage.entity.flow;
 
 import lombok.Data;
 import java.io.Serializable;
@@ -10,7 +10,7 @@ import java.io.Serializable;
 public class FlowTaskDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private Long id;
+    private String taskId;
     private String taskKey;
     private Long processInstanceId;
     private Long processDefinitionId;

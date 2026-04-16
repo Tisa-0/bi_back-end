@@ -1,6 +1,5 @@
 package com.rightmanage.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.rightmanage.dto.BankOrgTreeVO;
 import com.rightmanage.entity.BankOrg;
 import com.rightmanage.mapper.BankOrgMapper;
@@ -9,6 +8,8 @@ import com.rightmanage.util.BankOrgTreeUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -26,42 +27,47 @@ public class BankOrgServiceImpl implements BankOrgService {
     }
 
     @Override
-    public List<BankOrg> getPath(Long id) {
+    public List<BankOrg> getPath(String orgcod) {
         List<BankOrg> all = getAll();
-        Map<Long, BankOrg> byId = BankOrgTreeUtils.toByIdMap(all);
-        if (!byId.containsKey(id)) {
+        Map<String, BankOrg> byId = BankOrgTreeUtils.toByIdMap(all);
+        if (!byId.containsKey(orgcod)) {
             return Collections.emptyList();
         }
-        return BankOrgTreeUtils.getPath(id, byId);
+        return BankOrgTreeUtils.getPath(orgcod, byId);
     }
 
     @Override
-    public BankOrg getParent(Long id) {
+    public BankOrg getParent(String orgcod) {
         List<BankOrg> all = getAll();
-        Map<Long, BankOrg> byId = BankOrgTreeUtils.toByIdMap(all);
-        return BankOrgTreeUtils.getParent(id, byId);
+        Map<String, BankOrg> byId = BankOrgTreeUtils.toByIdMap(all);
+        return BankOrgTreeUtils.getParent(orgcod, byId);
     }
 
     @Override
-    public List<BankOrg> getChildren(Long id) {
+    public List<BankOrg> getChildren(String orgcod) {
         List<BankOrg> all = getAll();
-        Map<Long, List<BankOrg>> childrenMap = BankOrgTreeUtils.toChildrenMap(all);
-        return BankOrgTreeUtils.getChildren(id, childrenMap);
+        Map<String, List<BankOrg>> childrenMap = BankOrgTreeUtils.toChildrenMap(all);
+        return BankOrgTreeUtils.getChildren(orgcod, childrenMap);
     }
 
     @Override
-    public List<BankOrg> getDescendants(Long id) {
+    public List<BankOrg> getDescendants(String orgcod) {
         List<BankOrg> all = getAll();
-        Map<Long, List<BankOrg>> childrenMap = BankOrgTreeUtils.toChildrenMap(all);
-        return BankOrgTreeUtils.getDescendants(id, childrenMap);
+        Map<String, List<BankOrg>> childrenMap = BankOrgTreeUtils.toChildrenMap(all);
+        return BankOrgTreeUtils.getDescendants(orgcod, childrenMap);
+    }
+
+    @Override
+    public List<BankOrg> getSubOrgList(String orgcod) {
+        return bankOrgMapper.selectSubOrgList(orgcod, today());
     }
 
     @Override
     public List<BankOrg> getAll() {
-        return bankOrgMapper.selectList(new LambdaQueryWrapper<BankOrg>()
-                .eq(BankOrg::getStatus, 1)
-                .orderByAsc(BankOrg::getLevel)
-                .orderByAsc(BankOrg::getSort)
-                .orderByAsc(BankOrg::getId));
+        return bankOrgMapper.selectActiveAll(today());
+    }
+
+    private String today() {
+        return LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
     }
 }

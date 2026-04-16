@@ -8,8 +8,8 @@ import java.util.Date;
  */
 @Data
 public class FlowInstanceVO {
-    private Long id;
-    private Long flowId;
+    private String instanceId;
+    private String flowCode;
     private String flowName;
     private String instanceName;
     private Long applicantId;
@@ -26,5 +26,5 @@ public class FlowInstanceVO {
     private String assetTypeName; // 资产类型名称
     private String typeCode;       // 资产类型编码
     private Boolean canCancel;    // 是否可撤回（没有任何节点审批通过）
-    private Long currentNodeId;    // 当前节点数据库主键（FlowNodeConfig.id，用于前端获取节点详情）
+    private String currentNodeId;    // 当前节点数据库主键（FlowNodeConfig.node_id，用于前端获取节点详情）
 }

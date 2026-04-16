@@ -6,6 +6,8 @@ import com.rightmanage.service.flow.FlowTemplateParamService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 import java.util.List;
 
 /**
@@ -18,19 +20,22 @@ public class FlowTemplateParamServiceImpl implements FlowTemplateParamService {
     private FlowTemplateParamMapper flowTemplateParamMapper;
 
     @Override
-    public List<FlowTemplateParam> getParamsByTemplateId(Long templateId) {
+    public List<FlowTemplateParam> getParamsByTemplateId(String templateId) {
         return flowTemplateParamMapper.findByTemplateId(templateId);
     }
 
     @Override
     @Transactional
-    public void saveParams(Long templateId, List<FlowTemplateParam> params) {
+    public void saveParams(String templateId, List<FlowTemplateParam> params) {
         // 先删除原有参数
         flowTemplateParamMapper.deleteByTemplateId(templateId);
         // 批量保存新参数
         if (params != null && !params.isEmpty()) {
             for (FlowTemplateParam param : params) {
-                param.setTemplateId(templateId);
+                param.setFlowCode(templateId);
+                if (param.getDefinitionParamId() == null || param.getDefinitionParamId().trim().isEmpty()) {
+                    param.setDefinitionParamId(UUID.randomUUID().toString().replace("-", ""));
+                }
             }
             flowTemplateParamMapper.batchSave(params);
         }
@@ -38,7 +43,7 @@ public class FlowTemplateParamServiceImpl implements FlowTemplateParamService {
 
     @Override
     @Transactional
-    public void deleteParam(Long id) {
+    public void deleteParam(String id) {
         flowTemplateParamMapper.deleteById(id);
     }
 }

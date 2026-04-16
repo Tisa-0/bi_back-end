@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -35,10 +36,24 @@ public class AuthServiceImpl implements AuthService {
         if (user == null) {
             throw new RuntimeException("用户不存在");
         }
-        if (!request.getPassword().equals(user.getPassword())) {
+        String rawPassword = request.getPassword();
+        String storedPassword = user.getPassword();
+        String normalizedRawPassword = rawPassword == null ? null : rawPassword.trim();
+        String normalizedStoredPassword = storedPassword == null ? null : storedPassword.trim();
+        boolean passwordOk = false;
+        if (normalizedStoredPassword != null) {
+            // 兼容：历史数据可能为明文；新数据可能为 BCrypt
+            if (normalizedStoredPassword.startsWith("$2a$") || normalizedStoredPassword.startsWith("$2b$") || normalizedStoredPassword.startsWith("$2y$")) {
+                passwordOk = passwordEncoder.matches(normalizedRawPassword, normalizedStoredPassword);
+            } else {
+                passwordOk = Objects.equals(normalizedRawPassword, normalizedStoredPassword);
+            }
+        }
+        if (!passwordOk) {
             throw new RuntimeException("密码错误");
         }
-        if (user.getStatus() == 0) {
+        Integer status = user.getStatus();
+        if (status != null && status == 0) {
             throw new RuntimeException("用户已被禁用");
         }
         // 获取用户角色
@@ -48,14 +63,14 @@ public class AuthServiceImpl implements AuthService {
         if (userRoles.isEmpty()) {
             throw new RuntimeException("用户未分配角色");
         }
-        List<Long> roleIds = userRoles.stream().map(SysUserRole::getRoleId).collect(Collectors.toList());
-        List<SysRole> roles = sysRoleMapper.selectBatchIds(roleIds);
+        List<String> userRoleCodes = userRoles.stream().map(SysUserRole::getRoleCode).collect(Collectors.toList());
+        List<SysRole> roles = sysRoleMapper.selectBatchIds(userRoleCodes);
         List<String> roleCodes = roles.stream().map(SysRole::getRoleCode).collect(Collectors.toList());
         // 获取用户模块权限
         List<String> modules = new ArrayList<>();
-        for (Long roleId : roleIds) {
+        for (String roleCode : roleCodes) {
             LambdaQueryWrapper<SysRoleMenu> roleMenuWrapper = new LambdaQueryWrapper<>();
-            roleMenuWrapper.eq(SysRoleMenu::getRoleId, roleId);
+            roleMenuWrapper.eq(SysRoleMenu::getRoleCode, roleCode);
             List<SysRoleMenu> roleMenus = sysRoleMenuMapper.selectList(roleMenuWrapper);
             for (SysRoleMenu rm : roleMenus) {
                 if (rm.getModuleCode() != null && !modules.contains(rm.getModuleCode())) {

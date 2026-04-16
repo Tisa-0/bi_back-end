@@ -9,16 +9,15 @@ import java.util.Date;
 public class SysRoleMenu implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
+    @TableField("role_code")
+    private String roleCode;
 
-    private Long roleId;
-
-    private Long menuId;
+    private String menuId;
 
     private String moduleCode;
 
-    private Long tenantId;
+    @TableField("tenant_code")
+    private String tenantCode;
 
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;

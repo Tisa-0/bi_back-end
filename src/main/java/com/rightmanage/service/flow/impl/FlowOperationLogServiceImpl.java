@@ -13,8 +13,9 @@ import java.util.List;
 public class FlowOperationLogServiceImpl extends ServiceImpl<FlowOperationLogMapper, FlowOperationLog> implements FlowOperationLogService {
 
     @Override
-    public void saveLog(Long instanceId, Long operatorId, String operatorName, String operationType, String operationContent) {
+    public void saveLog(String instanceId, Long operatorId, String operatorName, String operationType, String operationContent) {
         FlowOperationLog log = new FlowOperationLog();
+        log.setLogId(java.util.UUID.randomUUID().toString().replace("-", ""));
         log.setInstanceId(instanceId);
         log.setOperatorId(operatorId);
         log.setOperatorName(operatorName);
@@ -25,7 +26,7 @@ public class FlowOperationLogServiceImpl extends ServiceImpl<FlowOperationLogMap
     }
 
     @Override
-    public List<FlowOperationLog> listByInstanceId(Long instanceId) {
+    public List<FlowOperationLog> listByInstanceId(String instanceId) {
         return baseMapper.selectList(new LambdaQueryWrapper<FlowOperationLog>()
                 .eq(FlowOperationLog::getInstanceId, instanceId)
                 .orderByAsc(FlowOperationLog::getOperationTime));

@@ -9,11 +9,13 @@ import java.util.List;
 public class SysMenuVO implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private Long id;
+    private String menuId;
+
+    private String id;
 
     private String menuName;
 
-    private Long parentId;
+    private String parentId;
 
     private String path;
 

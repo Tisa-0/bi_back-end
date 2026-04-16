@@ -1,10 +1,7 @@
 package com.rightmanage.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
@@ -19,16 +16,14 @@ import java.util.Date;
 public class SysUserOrgAuth implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @TableId(value = "id", type = IdType.AUTO)
-    private Long id;
-
     private Long userId;
 
     private String moduleCode;
 
-    private Long tenantId;
+    @TableField("tenant_code")
+    private String tenantCode;
 
-    private Long orgId;
+    private String orgId;
 
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
@@ -36,6 +31,5 @@ public class SysUserOrgAuth implements Serializable {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
 
-    @TableLogic
     private Integer deleted;
 }

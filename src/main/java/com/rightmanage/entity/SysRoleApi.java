@@ -12,7 +12,8 @@ public class SysRoleApi implements Serializable {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    private Long roleId;
+    @TableField("role_code")
+    private String roleCode;
 
     private Long apiId;
 

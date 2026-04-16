@@ -11,15 +11,15 @@ public interface FlowTemplateParamService {
     /**
      * 根据模板ID获取参数列表
      */
-    List<FlowTemplateParam> getParamsByTemplateId(Long templateId);
+    List<FlowTemplateParam> getParamsByTemplateId(String templateId);
 
     /**
      * 保存流程模板参数
      */
-    void saveParams(Long templateId, List<FlowTemplateParam> params);
+    void saveParams(String templateId, List<FlowTemplateParam> params);
 
     /**
      * 删除参数
      */
-    void deleteParam(Long id);
+    void deleteParam(String id);
 }

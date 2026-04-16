@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rightmanage.mapper.flow.FlowTemplateParamMapper">
+
+  <resultMap id="FlowDefinitionParamMap" type="com.rightmanage.entity.flow.FlowTemplateParam">
+    <id property="definitionParamId" column="definition_param_id"/>
+    <result property="flowCode" column="flow_code"/>
+    <result property="paramCode" column="param_code"/>
+    <result property="paramName" column="param_name"/>
+    <result property="paramType" column="param_type"/>
+    <result property="required" column="required"/>
+    <result property="defaultValue" column="default_value"/>
+    <result property="optionJson" column="option_json"/>
+    <result property="sort" column="sort"/>
+  </resultMap>
+
+  <select id="findByTemplateId" resultMap="FlowDefinitionParamMap">
+    SELECT definition_param_id, flow_code, param_code, param_name, param_type, required, default_value, option_json, sort
+    FROM flow_definition_param
+    WHERE flow_code = #{flowCode}
+    ORDER BY sort ASC
+  </select>
+
+  <insert id="save">
+    INSERT INTO flow_definition_param (
+      definition_param_id, flow_code, param_code, param_name, param_type, required, default_value, option_json, sort
+    ) VALUES (
+      #{definitionParamId}, #{flowCode}, #{paramCode}, #{paramName}, #{paramType}, #{required}, #{defaultValue}, #{optionJson}, #{sort}
+    )
+  </insert>
+
+  <insert id="batchSave">
+    INSERT INTO flow_definition_param (
+      definition_param_id, flow_code, param_code, param_name, param_type, required, default_value, option_json, sort
+    ) VALUES
+    <foreach collection="params" item="item" separator=",">
+      (#{item.definitionParamId}, #{item.flowCode}, #{item.paramCode}, #{item.paramName}, #{item.paramType}, #{item.required}, #{item.defaultValue}, #{item.optionJson}, #{item.sort})
+    </foreach>
+  </insert>
+
+  <delete id="deleteById">
+    DELETE FROM flow_definition_param
+    WHERE definition_param_id = #{definitionParamId}
+  </delete>
+
+  <delete id="deleteByTemplateId">
+    DELETE FROM flow_definition_param
+    WHERE flow_code = #{flowCode}
+  </delete>
+
+</mapper>

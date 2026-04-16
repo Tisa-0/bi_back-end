@@ -54,32 +54,34 @@ public class SysMenuServiceImpl implements SysMenuService {
     @Override
     public List<SysMenu> listByModuleCode(String moduleCode) {
         LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SysMenu::getModuleCode, moduleCode)
-               .orderByAsc(SysMenu::getSort);
+        if (moduleCode != null && !moduleCode.isEmpty()) {
+            wrapper.eq(SysMenu::getModuleCode, moduleCode);
+        }
+        wrapper.orderByAsc(SysMenu::getSort);
         return sysMenuMapper.selectList(wrapper);
     }
 
     @Override
     public List<SysMenuVO> listTreeByModuleCode(String moduleCode) {
         List<SysMenu> menuList = listByModuleCode(moduleCode);
-        return buildMenuTree(menuList, 0L);
+        return buildMenuTree(menuList, "0");
     }
 
     @Override
     public List<SysMenuVO> listTreeByUserIdAndModuleCode(Long userId, String moduleCode) {
         System.out.println("listTreeByUserIdAndModuleCode - userId: " + userId + ", moduleCode: " + moduleCode);
 
-        // 1. 获取用户在指定模块下的角色ID列表
-        List<Long> roleIds = getUserRoleIdsByModuleCode(userId, moduleCode);
-        System.out.println("listTreeByUserIdAndModuleCode - roleIds: " + roleIds);
+        // 1. 获取用户在指定模块下的角色编码列表
+        List<String> roleCodes = getUserRoleIdsByModuleCode(userId, moduleCode);
+        System.out.println("listTreeByUserIdAndModuleCode - roleCodes: " + roleCodes);
 
-        if (roleIds.isEmpty()) {
+        if (roleCodes.isEmpty()) {
             System.out.println("listTreeByUserIdAndModuleCode - No roles found for user in module: " + moduleCode);
             return new ArrayList<>();
         }
 
         // 2. 获取这些角色绑定的菜单ID
-        List<Long> menuIds = getMenuIdsByRoleIds(roleIds, moduleCode);
+        List<String> menuIds = getMenuIdsByRoleIds(roleCodes, moduleCode);
         System.out.println("listTreeByUserIdAndModuleCode - menuIds: " + menuIds);
 
         if (menuIds.isEmpty()) {
@@ -88,18 +90,18 @@ public class SysMenuServiceImpl implements SysMenuService {
         }
 
         // 3. 获取所有父菜单ID（确保子菜单的父菜单也被包含）
-        List<Long> allMenuIds = new ArrayList<>(menuIds);
-        List<Long> parentMenuIds = new ArrayList<>(menuIds);
+        List<String> allMenuIds = new ArrayList<>(menuIds);
+        List<String> parentMenuIds = new ArrayList<>(menuIds);
         while (!parentMenuIds.isEmpty()) {
             // 查询这些菜单的父菜单
             LambdaQueryWrapper<SysMenu> parentWrapper = new LambdaQueryWrapper<>();
-            parentWrapper.in(SysMenu::getId, parentMenuIds)
+            parentWrapper.in(SysMenu::getMenuId, parentMenuIds)
                         .eq(SysMenu::getModuleCode, moduleCode);
             List<SysMenu> parentMenus = sysMenuMapper.selectList(parentWrapper);
 
             parentMenuIds.clear();
             for (SysMenu menu : parentMenus) {
-                if (menu.getParentId() != null && menu.getParentId() != 0 && !allMenuIds.contains(menu.getParentId())) {
+                if (menu.getParentId() != null && !"0".equals(menu.getParentId()) && !allMenuIds.contains(menu.getParentId())) {
                     parentMenuIds.add(menu.getParentId());
                     allMenuIds.add(menu.getParentId());
                 }
@@ -109,30 +111,30 @@ public class SysMenuServiceImpl implements SysMenuService {
 
         // 4. 获取菜单列表（包含所有父菜单和子菜单）
         LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
-        wrapper.in(SysMenu::getId, allMenuIds)
+        wrapper.in(SysMenu::getMenuId, allMenuIds)
                .orderByAsc(SysMenu::getSort);
         List<SysMenu> menuList = sysMenuMapper.selectList(wrapper);
         System.out.println("listTreeByUserIdAndModuleCode - menuList size: " + menuList.size());
 
         // 5. 构建菜单树
-        return buildMenuTree(menuList, 0L);
+        return buildMenuTree(menuList, "0");
     }
 
     @Override
-    public List<SysMenuVO> listTreeByUserIdAndModuleCodeAndTenant(Long userId, String moduleCode, Long tenantId) {
-        System.out.println("listTreeByUserIdAndModuleCodeAndTenant - userId: " + userId + ", moduleCode: " + moduleCode + ", tenantId: " + tenantId);
+    public List<SysMenuVO> listTreeByUserIdAndModuleCodeAndTenant(Long userId, String moduleCode, String tenantCode) {
+        System.out.println("listTreeByUserIdAndModuleCodeAndTenant - userId: " + userId + ", moduleCode: " + moduleCode + ", tenantCode: " + tenantCode);
 
-        // 1. 获取用户在指定模块、指定租户下的角色ID列表
-        List<Long> roleIds = getUserRoleIdsByModuleCodeAndTenant(userId, moduleCode, tenantId);
-        System.out.println("listTreeByUserIdAndModuleCodeAndTenant - roleIds: " + roleIds);
+        // 1. 获取用户在指定模块、指定租户下的角色编码列表
+        List<String> roleCodes = getUserRoleIdsByModuleCodeAndTenant(userId, moduleCode, tenantCode);
+        System.out.println("listTreeByUserIdAndModuleCodeAndTenant - roleCodes: " + roleCodes);
 
-        if (roleIds.isEmpty()) {
-            System.out.println("listTreeByUserIdAndModuleCodeAndTenant - No roles found for user in module: " + moduleCode + ", tenant: " + tenantId);
+        if (roleCodes.isEmpty()) {
+            System.out.println("listTreeByUserIdAndModuleCodeAndTenant - No roles found for user in module: " + moduleCode + ", tenant: " + tenantCode);
             return new ArrayList<>();
         }
 
         // 2. 获取这些角色绑定的菜单ID（需要同时匹配模块和租户）
-        List<Long> menuIds = getMenuIdsByRoleIdsAndTenant(roleIds, moduleCode, tenantId);
+        List<String> menuIds = getMenuIdsByRoleIdsAndTenant(roleCodes, moduleCode, tenantCode);
         System.out.println("listTreeByUserIdAndModuleCodeAndTenant - menuIds: " + menuIds);
 
         if (menuIds.isEmpty()) {
@@ -141,18 +143,18 @@ public class SysMenuServiceImpl implements SysMenuService {
         }
 
         // 3. 获取所有父菜单ID（确保子菜单的父菜单也被包含）
-        List<Long> allMenuIds = new ArrayList<>(menuIds);
-        List<Long> parentMenuIds = new ArrayList<>(menuIds);
+        List<String> allMenuIds = new ArrayList<>(menuIds);
+        List<String> parentMenuIds = new ArrayList<>(menuIds);
         while (!parentMenuIds.isEmpty()) {
             // 查询这些菜单的父菜单
             LambdaQueryWrapper<SysMenu> parentWrapper = new LambdaQueryWrapper<>();
-            parentWrapper.in(SysMenu::getId, parentMenuIds)
+            parentWrapper.in(SysMenu::getMenuId, parentMenuIds)
                         .eq(SysMenu::getModuleCode, moduleCode);
             List<SysMenu> parentMenus = sysMenuMapper.selectList(parentWrapper);
 
             parentMenuIds.clear();
             for (SysMenu menu : parentMenus) {
-                if (menu.getParentId() != null && menu.getParentId() != 0 && !allMenuIds.contains(menu.getParentId())) {
+                if (menu.getParentId() != null && !"0".equals(menu.getParentId()) && !allMenuIds.contains(menu.getParentId())) {
                     parentMenuIds.add(menu.getParentId());
                     allMenuIds.add(menu.getParentId());
                 }
@@ -162,19 +164,19 @@ public class SysMenuServiceImpl implements SysMenuService {
 
         // 4. 获取菜单列表（包含所有父菜单和子菜单）
         LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
-        wrapper.in(SysMenu::getId, allMenuIds)
+        wrapper.in(SysMenu::getMenuId, allMenuIds)
                .orderByAsc(SysMenu::getSort);
         List<SysMenu> menuList = sysMenuMapper.selectList(wrapper);
         System.out.println("listTreeByUserIdAndModuleCodeAndTenant - menuList size: " + menuList.size());
 
         // 5. 构建菜单树
-        return buildMenuTree(menuList, 0L);
+        return buildMenuTree(menuList, "0");
     }
 
     /**
      * 获取用户在指定模块、指定租户下的角色ID列表
      */
-    private List<Long> getUserRoleIdsByModuleCodeAndTenant(Long userId, String moduleCode, Long tenantId) {
+    private List<String> getUserRoleIdsByModuleCodeAndTenant(Long userId, String moduleCode, String tenantCode) {
         // 通过SysUserRole表查询用户角色
         LambdaQueryWrapper<SysUserRole> userRoleWrapper = new LambdaQueryWrapper<>();
         userRoleWrapper.eq(SysUserRole::getUserId, userId);
@@ -186,25 +188,27 @@ public class SysMenuServiceImpl implements SysMenuService {
             return new ArrayList<>();
         }
 
-        List<Long> roleIds = userRoles.stream()
-                .map(SysUserRole::getRoleId)
+        List<String> roleCodes = userRoles.stream()
+                .map(SysUserRole::getRoleCode)
                 .collect(Collectors.toList());
 
-        System.out.println("getUserRoleIdsByModuleCodeAndTenant - all roleIds: " + roleIds);
+        System.out.println("getUserRoleIdsByModuleCodeAndTenant - all roleCodes: " + roleCodes);
 
         // 进一步过滤：只获取指定模块的角色（通过SysRoleMenu表查询）
-        // 注意：模块C需要匹配tenantId，但也要允许tenantId为NULL的情况（表示该角色在该模块下有权限）
+        // 注意：模块C需要匹配tenantCode，但也要允许tenantCode为NULL的情况（表示该角色在该模块下有权限）
         LambdaQueryWrapper<SysRoleMenu> roleMenuWrapper = new LambdaQueryWrapper<>();
-        roleMenuWrapper.in(SysRoleMenu::getRoleId, roleIds)
+        roleMenuWrapper.in(SysRoleMenu::getRoleCode, roleCodes)
                        .eq(SysRoleMenu::getModuleCode, moduleCode);
         List<SysRoleMenu> roleMenus = sysRoleMenuMapper.selectList(roleMenuWrapper);
 
         System.out.println("getUserRoleIdsByModuleCodeAndTenant - roleMenus in module " + moduleCode + ": " + roleMenus.size());
 
-        // 过滤出与租户匹配的角色（匹配tenantId，或者tenantId为NULL表示该模块下的通用权限）
+        // 过滤出与租户匹配的角色（匹配tenantCode，或者tenantCode为NULL表示该模块下的通用权限）
         return roleMenus.stream()
-                .filter(rm -> tenantId.equals(rm.getTenantId()) || rm.getTenantId() == null)
-                .map(SysRoleMenu::getRoleId)
+                .filter(rm -> (tenantCode != null && tenantCode.equals(rm.getTenantCode()))
+                        || rm.getTenantCode() == null
+                        || "".equals(rm.getTenantCode()))
+                .map(SysRoleMenu::getRoleCode)
                 .distinct()
                 .collect(Collectors.toList());
     }
@@ -212,7 +216,7 @@ public class SysMenuServiceImpl implements SysMenuService {
     /**
      * 获取用户在指定模块下的角色ID列表
      */
-    private List<Long> getUserRoleIdsByModuleCode(Long userId, String moduleCode) {
+    private List<String> getUserRoleIdsByModuleCode(Long userId, String moduleCode) {
         // 通过SysUserRole表查询用户角色
         LambdaQueryWrapper<SysUserRole> userRoleWrapper = new LambdaQueryWrapper<>();
         userRoleWrapper.eq(SysUserRole::getUserId, userId);
@@ -224,22 +228,22 @@ public class SysMenuServiceImpl implements SysMenuService {
             return new ArrayList<>();
         }
 
-        List<Long> roleIds = userRoles.stream()
-                .map(SysUserRole::getRoleId)
+        List<String> roleCodes = userRoles.stream()
+                .map(SysUserRole::getRoleCode)
                 .collect(Collectors.toList());
 
-        System.out.println("getUserRoleIdsByModuleCode - all roleIds: " + roleIds);
+        System.out.println("getUserRoleIdsByModuleCode - all roleCodes: " + roleCodes);
 
         // 进一步过滤：只获取指定模块的角色（通过SysRoleMenu表查询）
         LambdaQueryWrapper<SysRoleMenu> roleMenuWrapper = new LambdaQueryWrapper<>();
-        roleMenuWrapper.in(SysRoleMenu::getRoleId, roleIds)
+        roleMenuWrapper.in(SysRoleMenu::getRoleCode, roleCodes)
                        .eq(SysRoleMenu::getModuleCode, moduleCode);
         List<SysRoleMenu> roleMenus = sysRoleMenuMapper.selectList(roleMenuWrapper);
 
         System.out.println("getUserRoleIdsByModuleCode - roleMenus in module " + moduleCode + ": " + roleMenus.size());
 
         return roleMenus.stream()
-                .map(SysRoleMenu::getRoleId)
+                .map(SysRoleMenu::getRoleCode)
                 .distinct()
                 .collect(Collectors.toList());
     }
@@ -247,9 +251,9 @@ public class SysMenuServiceImpl implements SysMenuService {
     /**
      * 获取角色绑定的菜单ID列表
      */
-    private List<Long> getMenuIdsByRoleIds(List<Long> roleIds, String moduleCode) {
+    private List<String> getMenuIdsByRoleIds(List<String> roleCodes, String moduleCode) {
         LambdaQueryWrapper<SysRoleMenu> wrapper = new LambdaQueryWrapper<>();
-        wrapper.in(SysRoleMenu::getRoleId, roleIds)
+        wrapper.in(SysRoleMenu::getRoleCode, roleCodes)
                .eq(SysRoleMenu::getModuleCode, moduleCode);
         List<SysRoleMenu> roleMenus = sysRoleMenuMapper.selectList(wrapper);
         return roleMenus.stream()
@@ -260,47 +264,57 @@ public class SysMenuServiceImpl implements SysMenuService {
 
     /**
      * 获取角色绑定的菜单ID（同时匹配模块和租户）
-     * 注意：也返回tenantId为NULL的菜单（表示该模块下的通用菜单）
+     * 注意：也返回tenantCode为NULL的菜单（表示该模块下的通用菜单）
      */
-    private List<Long> getMenuIdsByRoleIdsAndTenant(List<Long> roleIds, String moduleCode, Long tenantId) {
+    private List<String> getMenuIdsByRoleIdsAndTenant(List<String> roleCodes, String moduleCode, String tenantCode) {
         LambdaQueryWrapper<SysRoleMenu> wrapper = new LambdaQueryWrapper<>();
-        wrapper.in(SysRoleMenu::getRoleId, roleIds)
+        wrapper.in(SysRoleMenu::getRoleCode, roleCodes)
                .eq(SysRoleMenu::getModuleCode, moduleCode);
         List<SysRoleMenu> roleMenus = sysRoleMenuMapper.selectList(wrapper);
         
-        // 过滤出与租户匹配的菜单（匹配tenantId，或者tenantId为NULL表示通用菜单）
+        // 过滤出与租户匹配的菜单（匹配tenantCode，或者tenantCode为NULL表示通用菜单）
         return roleMenus.stream()
-                .filter(rm -> tenantId.equals(rm.getTenantId()) || rm.getTenantId() == null)
+                .filter(rm -> (tenantCode != null && tenantCode.equals(rm.getTenantCode()))
+                        || rm.getTenantCode() == null
+                        || "".equals(rm.getTenantCode()))
                 .map(SysRoleMenu::getMenuId)
                 .distinct()
                 .collect(Collectors.toList());
     }
 
     @Override
-    public SysMenu getById(Long id) {
-        return sysMenuMapper.selectById(id);
+    public SysMenu getById(String menuId) {
+        return sysMenuMapper.selectById(menuId);
     }
 
     @Override
     public boolean save(SysMenu menu) {
+        normalizeMenuIdentity(menu);
+        if (menu.getMenuId() == null || menu.getMenuId().trim().isEmpty()) {
+            menu.setMenuId(java.util.UUID.randomUUID().toString().replace("-", ""));
+        }
+        if (menu.getParentId() == null || menu.getParentId().trim().isEmpty()) {
+            menu.setParentId("0");
+        }
         return sysMenuMapper.insert(menu) > 0;
     }
 
     @Override
     public boolean updateById(SysMenu menu) {
+        normalizeMenuIdentity(menu);
         return sysMenuMapper.updateById(menu) > 0;
     }
 
     @Override
-    public boolean deleteById(Long id) {
-        return sysMenuMapper.deleteById(id) > 0;
+    public boolean deleteById(String menuId) {
+        return sysMenuMapper.deleteById(menuId) > 0;
     }
 
     @Override
     @Transactional
-    public boolean deleteWithChildren(Long id) {
+    public boolean deleteWithChildren(String menuId) {
         // 获取所有子菜单ID（包括自身）
-        List<Long> menuIds = getAllChildIds(id);
+        List<String> menuIds = getAllChildIds(menuId);
         // 删除角色菜单关联数据
         LambdaQueryWrapper<SysRoleMenu> wrapper = new LambdaQueryWrapper<>();
         wrapper.in(SysRoleMenu::getMenuId, menuIds);
@@ -310,25 +324,25 @@ public class SysMenuServiceImpl implements SysMenuService {
     }
 
     @Override
-    public boolean updateStatus(Long id, Integer status) {
+    public boolean updateStatus(String menuId, Integer status) {
         LambdaUpdateWrapper<SysMenu> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(SysMenu::getId, id)
+        wrapper.eq(SysMenu::getMenuId, menuId)
                .set(SysMenu::getStatus, status);
         return sysMenuMapper.update(null, wrapper) > 0;
     }
 
     @Override
-    public boolean validateParentId(Long id, Long parentId) {
+    public boolean validateParentId(String menuId, String parentId) {
         // 如果是新增（id为null）或者设置parentId为0（顶级菜单），直接通过
-        if (id == null || parentId == null || parentId == 0) {
+        if (menuId == null || parentId == null || "0".equals(parentId)) {
             return true;
         }
         // 不能将自身设置为父菜单
-        if (id.equals(parentId)) {
+        if (menuId.equals(parentId)) {
             return false;
         }
         // 不能将子菜单设置为父菜单（避免循环引用）
-        List<Long> childIds = getAllChildIds(id);
+        List<String> childIds = getAllChildIds(menuId);
         return !childIds.contains(parentId);
     }
 
@@ -337,43 +351,43 @@ public class SysMenuServiceImpl implements SysMenuService {
         List<SysMenu> menuList = listByModuleCode(moduleCode);
         // 添加一个虚拟的顶级菜单选项
         SysMenu rootMenu = new SysMenu();
-        rootMenu.setId(0L);
+        rootMenu.setMenuId("0");
         rootMenu.setMenuName("顶级菜单");
         rootMenu.setParentId(null);
         rootMenu.setModuleCode(moduleCode);
         rootMenu.setSort(0);
         menuList.add(0, rootMenu);
-        return buildMenuTree(menuList, 0L);
+        return buildMenuTree(menuList, "0");
     }
 
     /**
      * 递归构建菜单树（带循环检测）
      */
-    private List<SysMenuVO> buildMenuTree(List<SysMenu> menuList, Long parentId) {
+    private List<SysMenuVO> buildMenuTree(List<SysMenu> menuList, String parentId) {
         return buildMenuTreeWithHistory(menuList, parentId, new HashSet<>());
     }
 
     /**
      * 递归构建菜单树（带历史记录防循环）
      */
-    private List<SysMenuVO> buildMenuTreeWithHistory(List<SysMenu> menuList, Long parentId, Set<Long> visitedIds) {
+    private List<SysMenuVO> buildMenuTreeWithHistory(List<SysMenu> menuList, String parentId, Set<String> visitedIds) {
         List<SysMenuVO> treeNodeList = new ArrayList<>();
         for (SysMenu menu : menuList) {
             if (parentId.equals(menu.getParentId())) {
                 // 防循环：检查是否已访问过
-                if (visitedIds.contains(menu.getId())) {
+                if (visitedIds.contains(menu.getMenuId())) {
                     continue;
                 }
-                visitedIds.add(menu.getId());
+                visitedIds.add(menu.getMenuId());
 
                 SysMenuVO menuVO = convertToVO(menu);
                 // 递归查询当前菜单的所有子菜单（无限层级）
-                List<SysMenuVO> children = buildMenuTreeWithHistory(menuList, menu.getId(), visitedIds);
+                List<SysMenuVO> children = buildMenuTreeWithHistory(menuList, menu.getMenuId(), visitedIds);
                 menuVO.setChildren(children);
                 treeNodeList.add(menuVO);
 
                 // 回溯时移除当前节点，允许从其他路径访问
-                visitedIds.remove(menu.getId());
+                visitedIds.remove(menu.getMenuId());
             }
         }
         // 按sort字段排序子菜单
@@ -386,7 +400,8 @@ public class SysMenuServiceImpl implements SysMenuService {
      */
     private SysMenuVO convertToVO(SysMenu menu) {
         SysMenuVO vo = new SysMenuVO();
-        vo.setId(menu.getId());
+        vo.setMenuId(menu.getMenuId());
+        vo.setId(menu.getMenuId());
         vo.setMenuName(menu.getMenuName());
         vo.setParentId(menu.getParentId());
         vo.setPath(menu.getPath());
@@ -403,7 +418,7 @@ public class SysMenuServiceImpl implements SysMenuService {
     // ==================== 产品智能定制模块实现（全局结构+租户独立状态） ====================
 
     @Override
-    public List<SysMenu> listProductCustomMenus(Long tenantId) {
+    public List<SysMenu> listProductCustomMenus(String tenantCode) {
         // 1. 查询全局菜单结构
         LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(SysMenu::getModuleCode, PRODUCT_CUSTOM_MODULE_CODE)
@@ -411,25 +426,25 @@ public class SysMenuServiceImpl implements SysMenuService {
                 .orderByAsc(SysMenu::getSort);
         List<SysMenu> globalMenus = sysMenuMapper.selectList(wrapper);
 
-        if (tenantId == null) {
+        if (tenantCode == null) {
             // 如果没有指定租户，返回全局基础记录
             return globalMenus;
         }
 
         // 2. 查询该租户的菜单状态
-        List<Long> menuIds = globalMenus.stream().map(SysMenu::getId).collect(Collectors.toList());
+        List<String> menuIds = globalMenus.stream().map(SysMenu::getMenuId).collect(Collectors.toList());
         if (menuIds.isEmpty()) {
             return globalMenus;
         }
 
         LambdaQueryWrapper<SysTenantMenuStatus> statusWrapper = new LambdaQueryWrapper<>();
-        statusWrapper.eq(SysTenantMenuStatus::getTenantId, tenantId)
+        statusWrapper.eq(SysTenantMenuStatus::getTenantCode, tenantCode)
                 .in(SysTenantMenuStatus::getMenuId, menuIds)
                 .eq(SysTenantMenuStatus::getDeleted, 0);
         List<SysTenantMenuStatus> tenantStatusList = sysTenantMenuStatusMapper.selectList(statusWrapper);
 
         // 构建 menuId -> status 的映射
-        Map<Long, Integer> tenantStatusMap = new HashMap<>();
+        Map<String, Integer> tenantStatusMap = new HashMap<>();
         for (SysTenantMenuStatus status : tenantStatusList) {
             tenantStatusMap.put(status.getMenuId(), status.getStatus());
         }
@@ -442,8 +457,8 @@ public class SysMenuServiceImpl implements SysMenuService {
             BeanUtils.copyProperties(globalMenu, mergedMenu);
 
             // 覆盖为租户独立状态，无记录则用全局默认status
-            if (tenantStatusMap.containsKey(globalMenu.getId())) {
-                mergedMenu.setStatus(tenantStatusMap.get(globalMenu.getId()));
+            if (tenantStatusMap.containsKey(globalMenu.getMenuId())) {
+                mergedMenu.setStatus(tenantStatusMap.get(globalMenu.getMenuId()));
             }
 
             resultMenus.add(mergedMenu);
@@ -453,29 +468,30 @@ public class SysMenuServiceImpl implements SysMenuService {
     }
 
     @Override
-    public List<SysMenuVO> listProductCustomMenuTree(Long tenantId) {
-        List<SysMenu> menuList = listProductCustomMenus(tenantId);
-        return buildMenuTree(menuList, 0L);
+    public List<SysMenuVO> listProductCustomMenuTree(String tenantCode) {
+        List<SysMenu> menuList = listProductCustomMenus(tenantCode);
+        return buildMenuTree(menuList, "0");
     }
 
     @Override
-    public List<SysMenuVO> getProductCustomMenuTreeOptions(Long tenantId) {
+    public List<SysMenuVO> getProductCustomMenuTreeOptions(String tenantCode) {
         // 产品智能定制模块：树选项不区分租户，使用全局结构
         List<SysMenu> menuList = listByModuleCode(PRODUCT_CUSTOM_MODULE_CODE);
         // 添加一个虚拟的顶级菜单选项
         SysMenu rootMenu = new SysMenu();
-        rootMenu.setId(0L);
+        rootMenu.setMenuId("0");
         rootMenu.setMenuName("顶级菜单");
-        rootMenu.setParentId(0L);
+        rootMenu.setParentId("0");
         rootMenu.setModuleCode(PRODUCT_CUSTOM_MODULE_CODE);
         rootMenu.setSort(0);
         menuList.add(0, rootMenu);
-        return buildMenuTree(menuList, 0L);
+        return buildMenuTree(menuList, "0");
     }
 
     @Override
     @Transactional
-    public boolean updateProductCustomMenu(SysMenu menu, Long operateTenantId) {
+    public boolean updateProductCustomMenu(SysMenu menu, String operateTenantCode) {
+        normalizeMenuIdentity(menu);
         // 1. 判断是否仅更新 status
         boolean isOnlyStatus = menu.getStatus() != null
                 && menu.getMenuName() == null
@@ -483,12 +499,12 @@ public class SysMenuServiceImpl implements SysMenuService {
                 && menu.getComponent() == null
                 && menu.getSort() == null;
 
-        if (isOnlyStatus && operateTenantId != null) {
+        if (isOnlyStatus && operateTenantCode != null) {
             // 场景1：仅更新 status - 更新租户菜单状态表
-            return updateTenantMenuStatus(menu.getId(), operateTenantId, menu.getStatus());
+            return updateTenantMenuStatus(menu.getMenuId(), operateTenantCode, menu.getStatus());
         } else {
             // 场景2：更新结构字段 - 更新全局菜单表（全局生效）
-            SysMenu globalMenu = sysMenuMapper.selectById(menu.getId());
+            SysMenu globalMenu = sysMenuMapper.selectById(menu.getMenuId());
             if (globalMenu == null) {
                 throw new RuntimeException("菜单不存在");
             }
@@ -518,10 +534,10 @@ public class SysMenuServiceImpl implements SysMenuService {
     /**
      * 更新租户菜单状态
      */
-    private boolean updateTenantMenuStatus(Long menuId, Long tenantId, Integer status) {
+    private boolean updateTenantMenuStatus(String menuId, String tenantCode, Integer status) {
         // 查询是否已有状态记录
         LambdaQueryWrapper<SysTenantMenuStatus> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(SysTenantMenuStatus::getTenantId, tenantId)
+        wrapper.eq(SysTenantMenuStatus::getTenantCode, tenantCode)
                 .eq(SysTenantMenuStatus::getMenuId, menuId)
                 .eq(SysTenantMenuStatus::getDeleted, 0);
         SysTenantMenuStatus existingStatus = sysTenantMenuStatusMapper.selectOne(wrapper);
@@ -529,11 +545,16 @@ public class SysMenuServiceImpl implements SysMenuService {
         if (existingStatus != null) {
             // 更新已有记录
             existingStatus.setStatus(status);
-            return sysTenantMenuStatusMapper.updateById(existingStatus) > 0;
+            LambdaUpdateWrapper<SysTenantMenuStatus> updateWrapper = new LambdaUpdateWrapper<>();
+            updateWrapper.eq(SysTenantMenuStatus::getTenantCode, tenantCode)
+                    .eq(SysTenantMenuStatus::getMenuId, menuId)
+                    .eq(SysTenantMenuStatus::getDeleted, 0)
+                    .set(SysTenantMenuStatus::getStatus, status);
+            return sysTenantMenuStatusMapper.update(null, updateWrapper) > 0;
         } else {
             // 新增记录
             SysTenantMenuStatus newStatus = new SysTenantMenuStatus();
-            newStatus.setTenantId(tenantId);
+            newStatus.setTenantCode(tenantCode);
             newStatus.setMenuId(menuId);
             newStatus.setStatus(status);
             return sysTenantMenuStatusMapper.insert(newStatus) > 0;
@@ -542,9 +563,9 @@ public class SysMenuServiceImpl implements SysMenuService {
 
     @Override
     @Transactional
-    public boolean deleteProductCustomMenu(Long menuId) {
+    public boolean deleteProductCustomMenu(String menuId) {
         // 1. 获取该菜单的所有子菜单ID（包括自身）
-        List<Long> menuIds = getAllChildIds(menuId);
+        List<String> menuIds = getAllChildIds(menuId);
 
         // 2. 删除所有租户的状态记录
         LambdaQueryWrapper<SysTenantMenuStatus> statusWrapper = new LambdaQueryWrapper<>();
@@ -552,9 +573,9 @@ public class SysMenuServiceImpl implements SysMenuService {
         sysTenantMenuStatusMapper.delete(statusWrapper);
 
         // 3. 删除角色菜单关联
-        for (Long id : menuIds) {
+        for (String childMenuId : menuIds) {
             LambdaQueryWrapper<SysRoleMenu> roleMenuWrapper = new LambdaQueryWrapper<>();
-            roleMenuWrapper.eq(SysRoleMenu::getMenuId, id);
+            roleMenuWrapper.eq(SysRoleMenu::getMenuId, childMenuId);
             sysRoleMenuMapper.delete(roleMenuWrapper);
         }
 
@@ -564,12 +585,16 @@ public class SysMenuServiceImpl implements SysMenuService {
 
     @Override
     @Transactional
-    public boolean saveProductCustomMenu(SysMenu menu, List<Long> tenantIds) {
+    public boolean saveProductCustomMenu(SysMenu menu, List<String> tenantCodes) {
+        normalizeMenuIdentity(menu);
         // 1. 创建全局菜单记录
         // 保留前端传入的 moduleCode，不强制覆盖
         // 如果 parentId 是顶级菜单，设置为 0
-        if (menu.getParentId() == null || menu.getParentId() == 0) {
-            menu.setParentId(0L);
+        if (menu.getParentId() == null || "0".equals(menu.getParentId())) {
+            menu.setParentId("0");
+        }
+        if (menu.getMenuId() == null || menu.getMenuId().trim().isEmpty()) {
+            menu.setMenuId(java.util.UUID.randomUUID().toString().replace("-", ""));
         }
         // status 使用默认值
         if (menu.getStatus() == null) {
@@ -577,13 +602,13 @@ public class SysMenuServiceImpl implements SysMenuService {
         }
         sysMenuMapper.insert(menu);
 
-        Long globalMenuId = menu.getId();
+        String globalMenuId = menu.getMenuId();
 
         // 2. 为所有租户生成状态记录
-        if (tenantIds != null && !tenantIds.isEmpty()) {
-            for (Long tenantId : tenantIds) {
+        if (tenantCodes != null && !tenantCodes.isEmpty()) {
+            for (String tenantCode : tenantCodes) {
                 SysTenantMenuStatus tenantStatus = new SysTenantMenuStatus();
-                tenantStatus.setTenantId(tenantId);
+                tenantStatus.setTenantCode(tenantCode);
                 tenantStatus.setMenuId(globalMenuId);
                 tenantStatus.setStatus(menu.getStatus());
                 sysTenantMenuStatusMapper.insert(tenantStatus);
@@ -603,9 +628,9 @@ public class SysMenuServiceImpl implements SysMenuService {
 
     @Override
     @Transactional
-    public boolean initTenantMenuStatus(Long tenantId) {
-        if (tenantId == null) {
-            throw new RuntimeException("租户ID不能为空");
+    public boolean initTenantMenuStatus(String tenantCode) {
+        if (tenantCode == null || tenantCode.trim().isEmpty()) {
+            throw new RuntimeException("租户编码不能为空");
         }
 
         // 查询所有产品智能定制菜单
@@ -619,24 +644,24 @@ public class SysMenuServiceImpl implements SysMenuService {
         }
 
         // 检查是否已有状态记录
-        List<Long> menuIds = menus.stream().map(SysMenu::getId).collect(Collectors.toList());
+        List<String> menuIds = menus.stream().map(SysMenu::getMenuId).collect(Collectors.toList());
         LambdaQueryWrapper<SysTenantMenuStatus> statusWrapper = new LambdaQueryWrapper<>();
-        statusWrapper.eq(SysTenantMenuStatus::getTenantId, tenantId)
+        statusWrapper.eq(SysTenantMenuStatus::getTenantCode, tenantCode)
                 .in(SysTenantMenuStatus::getMenuId, menuIds)
                 .eq(SysTenantMenuStatus::getDeleted, 0);
         List<SysTenantMenuStatus> existingStatuses = sysTenantMenuStatusMapper.selectList(statusWrapper);
 
         // 已存在的菜单ID集合
-        List<Long> existingMenuIds = existingStatuses.stream()
+        List<String> existingMenuIds = existingStatuses.stream()
                 .map(SysTenantMenuStatus::getMenuId)
                 .collect(Collectors.toList());
 
         // 为没有状态记录的菜单创建默认状态
         for (SysMenu menu : menus) {
-            if (!existingMenuIds.contains(menu.getId())) {
+            if (!existingMenuIds.contains(menu.getMenuId())) {
                 SysTenantMenuStatus newStatus = new SysTenantMenuStatus();
-                newStatus.setTenantId(tenantId);
-                newStatus.setMenuId(menu.getId());
+                newStatus.setTenantCode(tenantCode);
+                newStatus.setMenuId(menu.getMenuId());
                 newStatus.setStatus(menu.getStatus() != null ? menu.getStatus() : 1);
                 sysTenantMenuStatusMapper.insert(newStatus);
             }
@@ -648,8 +673,8 @@ public class SysMenuServiceImpl implements SysMenuService {
     /**
      * 获取指定菜单的所有子菜单ID（包括自身）
      */
-    private List<Long> getAllChildIds(Long parentId) {
-        List<Long> result = new ArrayList<>();
+    private List<String> getAllChildIds(String parentId) {
+        List<String> result = new ArrayList<>();
         result.add(parentId);
 
         LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
@@ -657,8 +682,23 @@ public class SysMenuServiceImpl implements SysMenuService {
         List<SysMenu> children = sysMenuMapper.selectList(wrapper);
 
         for (SysMenu child : children) {
-            result.addAll(getAllChildIds(child.getId()));
+            result.addAll(getAllChildIds(child.getMenuId()));
         }
         return result;
     }
+
+    private void normalizeMenuIdentity(SysMenu menu) {
+        if (menu == null) {
+            return;
+        }
+        if ((menu.getMenuId() == null || menu.getMenuId().trim().isEmpty())
+                && menu.getId() != null && !menu.getId().trim().isEmpty()) {
+            menu.setMenuId(menu.getId());
+        }
+        if ((menu.getId() == null || menu.getId().trim().isEmpty())
+                && menu.getMenuId() != null && !menu.getMenuId().trim().isEmpty()) {
+            menu.setId(menu.getMenuId());
+        }
+    }
 }
+

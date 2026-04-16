@@ -23,9 +23,9 @@ public class SysModuleController {
         return Result.success(sysModuleService.listEnabled());
     }
 
-    @GetMapping("/{id}")
-    public Result<SysModule> getById(@PathVariable Long id) {
-        return Result.success(sysModuleService.getById(id));
+    @GetMapping("/{moduleCode}")
+    public Result<SysModule> getById(@PathVariable String moduleCode) {
+        return Result.success(sysModuleService.getById(moduleCode));
     }
 
     @GetMapping("/code/{moduleCode}")
@@ -45,9 +45,9 @@ public class SysModuleController {
         return Result.success();
     }
 
-    @DeleteMapping("/{id}")
-    public Result<?> delete(@PathVariable Long id) {
-        sysModuleService.deleteById(id);
+    @DeleteMapping("/{moduleCode}")
+    public Result<?> delete(@PathVariable String moduleCode) {
+        sysModuleService.deleteById(moduleCode);
         return Result.success();
     }
 

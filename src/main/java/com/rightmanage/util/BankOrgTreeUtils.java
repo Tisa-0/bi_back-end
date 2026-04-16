@@ -27,7 +27,7 @@ public final class BankOrgTreeUtils {
      * 构建标准树结构（id、parentId、name、level、code、children）
      */
     public static List<BankOrgTreeVO> buildTree(List<BankOrg> all) {
-        Map<Long, BankOrgTreeVO> map = new LinkedHashMap<>();
+        Map<String, BankOrgTreeVO> map = new LinkedHashMap<>();
         for (BankOrg org : all) {
             BankOrgTreeVO node = new BankOrgTreeVO();
             node.setId(org.getId());
@@ -41,7 +41,7 @@ public final class BankOrgTreeUtils {
 
         List<BankOrgTreeVO> roots = new ArrayList<>();
         for (BankOrgTreeVO node : map.values()) {
-            if (node.getParentId() == null || node.getParentId() == 0L) {
+            if (node.getParentId() == null || node.getParentId().trim().isEmpty()) {
                 roots.add(node);
                 continue;
             }
@@ -58,11 +58,11 @@ public final class BankOrgTreeUtils {
     /**
      * 获取完整路径（总行 -> ... -> 当前）
      */
-    public static List<BankOrg> getPath(Long id, Map<Long, BankOrg> byId) {
+    public static List<BankOrg> getPath(String id, Map<String, BankOrg> byId) {
         List<BankOrg> path = new ArrayList<>();
-        Set<Long> visited = new HashSet<>();
-        Long current = id;
-        while (current != null && current != 0L) {
+        Set<String> visited = new HashSet<>();
+        String current = id;
+        while (current != null && !current.trim().isEmpty()) {
             if (visited.contains(current)) {
                 break;
             }
@@ -85,9 +85,9 @@ public final class BankOrgTreeUtils {
     /**
      * 获取父节点
      */
-    public static BankOrg getParent(Long id, Map<Long, BankOrg> byId) {
+    public static BankOrg getParent(String id, Map<String, BankOrg> byId) {
         BankOrg current = byId.get(id);
-        if (current == null || current.getParentId() == null || current.getParentId() == 0L) {
+        if (current == null || current.getParentId() == null || current.getParentId().trim().isEmpty()) {
             return null;
         }
         return byId.get(current.getParentId());
@@ -96,20 +96,20 @@ public final class BankOrgTreeUtils {
     /**
      * 获取直接子节点
      */
-    public static List<BankOrg> getChildren(Long id, Map<Long, List<BankOrg>> childrenMap) {
+    public static List<BankOrg> getChildren(String id, Map<String, List<BankOrg>> childrenMap) {
         return childrenMap.getOrDefault(id, new ArrayList<>());
     }
 
     /**
      * 获取全部后代节点（BFS）
      */
-    public static List<BankOrg> getDescendants(Long id, Map<Long, List<BankOrg>> childrenMap) {
+    public static List<BankOrg> getDescendants(String id, Map<String, List<BankOrg>> childrenMap) {
         List<BankOrg> result = new ArrayList<>();
-        Deque<Long> queue = new ArrayDeque<>();
+        Deque<String> queue = new ArrayDeque<>();
         queue.add(id);
 
         while (!queue.isEmpty()) {
-            Long parentId = queue.poll();
+            String parentId = queue.poll();
             List<BankOrg> children = childrenMap.getOrDefault(parentId, new ArrayList<>());
             for (BankOrg child : children) {
                 result.add(child);
@@ -119,14 +119,14 @@ public final class BankOrgTreeUtils {
         return result;
     }
 
-    public static Map<Long, BankOrg> toByIdMap(List<BankOrg> all) {
+    public static Map<String, BankOrg> toByIdMap(List<BankOrg> all) {
         return all.stream().collect(Collectors.toMap(BankOrg::getId, o -> o, (a, b) -> a, HashMap::new));
     }
 
-    public static Map<Long, List<BankOrg>> toChildrenMap(List<BankOrg> all) {
-        Map<Long, List<BankOrg>> map = new HashMap<>();
+    public static Map<String, List<BankOrg>> toChildrenMap(List<BankOrg> all) {
+        Map<String, List<BankOrg>> map = new HashMap<>();
         for (BankOrg org : all) {
-            Long parentId = org.getParentId() == null ? 0L : org.getParentId();
+            String parentId = org.getParentId() == null ? "" : org.getParentId();
             map.computeIfAbsent(parentId, k -> new ArrayList<>()).add(org);
         }
         for (List<BankOrg> list : map.values()) {
@@ -136,7 +136,7 @@ public final class BankOrgTreeUtils {
         return map;
     }
 
-    private static void sortTree(List<BankOrgTreeVO> nodes, Map<Long, BankOrg> rawMap) {
+    private static void sortTree(List<BankOrgTreeVO> nodes, Map<String, BankOrg> rawMap) {
         nodes.sort(Comparator
                 .comparing((BankOrgTreeVO n) -> {
                     BankOrg raw = rawMap.get(n.getId());

@@ -5,10 +5,10 @@ import java.util.List;
 public interface SysModuleService {
     List<SysModule> list();
     List<SysModule> listEnabled();
-    SysModule getById(Long id);
+    SysModule getById(String moduleCode);
     boolean save(SysModule module);
     boolean updateById(SysModule module);
-    boolean deleteById(Long id);
+    boolean deleteById(String moduleCode);
 
     /**
      * 根据模块编码获取模块信息

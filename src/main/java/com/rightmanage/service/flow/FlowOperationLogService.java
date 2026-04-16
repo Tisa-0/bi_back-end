@@ -10,10 +10,10 @@ public interface FlowOperationLogService {
     /**
      * 保存操作日志
      */
-    void saveLog(Long instanceId, Long operatorId, String operatorName, String operationType, String operationContent);
+    void saveLog(String instanceId, Long operatorId, String operatorName, String operationType, String operationContent);
 
     /**
      * 获取流程实例的操作日志列表
      */
-    List<FlowOperationLog> listByInstanceId(Long instanceId);
+    List<FlowOperationLog> listByInstanceId(String instanceId);
 }

@@ -61,7 +61,10 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
             List<FlowNodeConfig> sortedNodes = sortNodesByLines(dto.getNodes(), dto.getLines());
             for (int i = 0; i < sortedNodes.size(); i++) {
                 FlowNodeConfig node = sortedNodes.get(i);
-                node.setFlowId(definition.getId());
+                node.setFlowCode(definition.getFlowCode());
+                if (!StringUtils.hasText(node.getNodeId())) {
+                    node.setNodeId(UUID.randomUUID().toString().replace("-", ""));
+                }
                 node.setSort(i + 1);
                 flowNodeConfigMapper.insert(node);
             }
@@ -82,8 +85,8 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
 
         // 获取节点唯一标识
         java.util.function.Function<FlowNodeConfig, String> getNodeId = node -> {
-            if (node.getUuid() != null && !node.getUuid().isEmpty()) {
-                return node.getUuid();
+            if (node.getNodeId() != null && !node.getNodeId().isEmpty()) {
+                return node.getNodeId();
             }
             return String.valueOf(nodes.indexOf(node));
         };
@@ -197,17 +200,17 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
 
     @Override
     public void updateFlowDefinition(FlowDefinitionDetailDTO dto) {
-        FlowDefinition definition = flowDefinitionMapper.selectById(dto.getId());
+        FlowDefinition definition = flowDefinitionMapper.selectByFlowCode(dto.getFlowCode());
         if (definition == null) {
             throw new RuntimeException("流程定义不存在");
         }
 
         // 校验流程编码唯一性（排除自身）
-        if (checkFlowCodeExists(dto.getFlowCode(), dto.getId())) {
+        if (checkFlowCodeExists(dto.getFlowCode(), dto.getFlowCode())) {
             throw new RuntimeException("流程编码已存在，请使用其他编码");
         }
 
-        BeanUtils.copyProperties(dto, definition, "id", "creatorId", "createTime", "updateTime");
+        BeanUtils.copyProperties(dto, definition, "creatorId", "createTime", "updateTime");
         // 手动赋值 flowCode，允许编辑时修改
         definition.setFlowCode(dto.getFlowCode());
         // 确保 canInitiate 字段被更新
@@ -222,14 +225,17 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
 
         // 删除原有节点配置，重新保存
         flowNodeConfigMapper.delete(new LambdaQueryWrapper<FlowNodeConfig>()
-                .eq(FlowNodeConfig::getFlowId, dto.getId()));
+                .eq(FlowNodeConfig::getFlowCode, definition.getFlowCode()));
 
         // 保存节点配置（按连线顺序）
         if (dto.getNodes() != null && !dto.getNodes().isEmpty() && dto.getLines() != null) {
             List<FlowNodeConfig> sortedNodes = sortNodesByLines(dto.getNodes(), dto.getLines());
             for (int i = 0; i < sortedNodes.size(); i++) {
                 FlowNodeConfig node = sortedNodes.get(i);
-                node.setFlowId(definition.getId());
+                node.setFlowCode(definition.getFlowCode());
+                if (!StringUtils.hasText(node.getNodeId())) {
+                    node.setNodeId(UUID.randomUUID().toString().replace("-", ""));
+                }
                 node.setSort(i + 1);
                 flowNodeConfigMapper.insert(node);
             }
@@ -243,8 +249,8 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     }
 
     @Override
-    public FlowDefinitionDetailDTO getFlowDefinitionDetail(Long id) {
-        FlowDefinition definition = flowDefinitionMapper.selectById(id);
+    public FlowDefinitionDetailDTO getFlowDefinitionDetail(String flowCode) {
+        FlowDefinition definition = flowDefinitionMapper.selectByFlowCode(flowCode);
         if (definition == null) {
             return null;
         }
@@ -255,7 +261,7 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
         // 获取节点配置
         List<FlowNodeConfig> nodes = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, id)
+                        .eq(FlowNodeConfig::getFlowCode, definition.getFlowCode())
                         .orderByAsc(FlowNodeConfig::getSort)
         );
         dto.setNodes(nodes);
@@ -264,18 +270,18 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     }
 
     @Override
-    public void deleteFlowDefinition(Long id) {
-        FlowDefinition definition = flowDefinitionMapper.selectById(id);
+    public void deleteFlowDefinition(String flowCode) {
+        FlowDefinition definition = flowDefinitionMapper.selectByFlowCode(flowCode);
         if (definition == null) {
             throw new RuntimeException("流程定义不存在");
         }
 
         // 删除节点配置
         flowNodeConfigMapper.delete(new LambdaQueryWrapper<FlowNodeConfig>()
-                .eq(FlowNodeConfig::getFlowId, id));
+                .eq(FlowNodeConfig::getFlowCode, definition.getFlowCode()));
 
         // 逻辑删除流程定义
-        flowDefinitionMapper.deleteById(id);
+        flowDefinitionMapper.deleteById(definition.getFlowCode());
     }
 
     @Override
@@ -285,8 +291,8 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
             return new ArrayList<>();
         }
 
-        List<Long> roleIds = sysUserService.getRoleIdsByUserId(userId);
-        if (roleIds.isEmpty()) {
+        List<String> roleCodes = sysUserService.getRoleIdsByUserId(userId);
+        if (roleCodes.isEmpty()) {
             return new ArrayList<>();
         }
 
@@ -298,8 +304,8 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
 
         List<FlowDefinition> result = new ArrayList<>();
         for (FlowDefinition flow : allFlows) {
-            if (hasStartRolePermission(flow, user, roleIds)) {
-                flow.setNeedTenant(checkFlowNeedTenant(flow.getId()));
+            if (hasStartRolePermission(flow, user, roleCodes)) {
+                flow.setNeedTenant(checkFlowNeedTenant(flow.getFlowCode()));
                 result.add(flow);
             }
         }
@@ -310,14 +316,14 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
     /**
      * 校验用户是否有发起权限
      */
-    private boolean hasStartRolePermission(FlowDefinition flow, SysUser user, List<Long> userRoleIds) {
+    private boolean hasStartRolePermission(FlowDefinition flow, SysUser user, List<String> userRoleCodes) {
         if (flow == null || !StringUtils.hasText(flow.getStartRoleIds())) {
             return false;
         }
         String[] startRoles = flow.getStartRoleIds().split(",");
-        for (Long roleId : userRoleIds) {
+        for (String roleCode : userRoleCodes) {
             for (String startRole : startRoles) {
-                if (roleId.toString().equals(startRole.trim())) {
+                if (roleCode != null && roleCode.equals(startRole.trim())) {
                     return true;
                 }
             }
@@ -329,10 +335,14 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
      * 检查流程是否需要租户（判断是否包含多租户审批节点：handlerType=role 且审批人模块 multiTenant=1 或 角色 org_related=1）
      */
     @Override
-    public boolean checkFlowNeedTenant(Long flowId) {
+    public boolean checkFlowNeedTenant(String flowCode) {
+        FlowDefinition definition = flowDefinitionMapper.selectByFlowCode(flowCode);
+        if (definition == null || !StringUtils.hasText(definition.getFlowCode())) {
+            return false;
+        }
         List<FlowNodeConfig> nodes = flowNodeConfigMapper.selectList(
                 new LambdaQueryWrapper<FlowNodeConfig>()
-                        .eq(FlowNodeConfig::getFlowId, flowId)
+                        .eq(FlowNodeConfig::getFlowCode, definition.getFlowCode())
         );
 
         for (FlowNodeConfig node : nodes) {
@@ -347,7 +357,7 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
                 if (StringUtils.hasText(node.getHandlerIds())) {
                     for (String roleId : node.getHandlerIds().split(",")) {
                         if (StringUtils.hasText(roleId)) {
-                            SysRole role = sysRoleService.getById(Long.parseLong(roleId.trim()));
+                            SysRole role = sysRoleService.getById(roleId.trim());
                             if (role != null && Boolean.TRUE.equals(role.getOrgRelated())) {
                                 return true;
                             }
@@ -363,14 +373,14 @@ public class FlowDefinitionServiceImpl extends ServiceImpl<FlowDefinitionMapper,
      * 检查流程编码是否存在
      */
     @Override
-    public boolean checkFlowCodeExists(String flowCode, Long excludeId) {
+    public boolean checkFlowCodeExists(String flowCode, String excludeFlowCode) {
         if (!StringUtils.hasText(flowCode)) {
             return false;
         }
         LambdaQueryWrapper<FlowDefinition> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(FlowDefinition::getFlowCode, flowCode);
-        if (excludeId != null) {
-            wrapper.ne(FlowDefinition::getId, excludeId);
+        if (excludeFlowCode != null) {
+            wrapper.ne(FlowDefinition::getFlowCode, excludeFlowCode);
         }
         return baseMapper.selectCount(wrapper) > 0;
     }

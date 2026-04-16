@@ -8,10 +8,18 @@ import java.sql.SQLIntegrityConstraintViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private String safeMessage(Throwable e) {
+        String message = e.getMessage();
+        if (message == null || message.trim().isEmpty()) {
+            return "系统异常：" + e.getClass().getSimpleName();
+        }
+        return message;
+    }
+
     @ExceptionHandler(Exception.class)
     public Result<?> handleException(Exception e) {
         e.printStackTrace();
-        return Result.error(e.getMessage());
+        return Result.error(safeMessage(e));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -22,7 +30,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RuntimeException.class)
     public Result<?> handleRuntimeException(RuntimeException e) {
         e.printStackTrace();
-        return Result.error(e.getMessage());
+        return Result.error(safeMessage(e));
     }
 
     /**

@@ -18,8 +18,9 @@ public class SysAsset implements Serializable {
     /** 关联资产类型ID（asset_type.id） */
     private Long typeId;
 
-    /** 所属租户ID（多租户模块使用） */
-    private Long tenantId;
+    /** 所属租户编码（多租户模块使用） */
+    @TableField("tenant_code")
+    private String tenantCode;
 
     /** 资产名称 */
     private String assetName;

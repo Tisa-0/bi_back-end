@@ -41,19 +41,19 @@ public class FlowInstanceController {
             @RequestParam Long userId,
             @RequestParam(required = false) String moduleCode,
             @RequestParam(required = false) String tenantCode,
-            @RequestParam(required = false) Long flowId,
+            @RequestParam(required = false) String flowCode,
             @RequestParam(required = false) String typeCode,
             @RequestParam(required = false) String currentNodeKey,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        return Result.success(flowInstanceService.myInitiated(userId, moduleCode, tenantCode, flowId, typeCode, currentNodeKey, pageNum, pageSize));
+        return Result.success(flowInstanceService.myInitiated(userId, moduleCode, tenantCode, flowCode, typeCode, currentNodeKey, pageNum, pageSize));
     }
 
     /**
      * 获取流程实例详情
      */
     @GetMapping("/detail")
-    public Result<FlowDetailVO> getById(@RequestParam Long instanceId) {
+    public Result<FlowDetailVO> getById(@RequestParam String instanceId) {
         return Result.success(flowInstanceService.getFlowDetail(instanceId));
     }
 
@@ -61,8 +61,8 @@ public class FlowInstanceController {
      * 发起流程
      */
     @PostMapping("/start")
-    public Result<Long> start(@RequestBody FlowStartDTO dto, @RequestParam Long userId) {
-        Long instanceId = flowInstanceService.startFlow(dto, userId);
+    public Result<String> start(@RequestBody FlowStartDTO dto, @RequestParam Long userId) {
+        String instanceId = flowInstanceService.startFlow(dto, userId);
         return Result.success(instanceId);
     }
 
@@ -70,7 +70,7 @@ public class FlowInstanceController {
      * 撤回流程
      */
     @PostMapping("/cancel")
-    public Result<?> cancel(@RequestParam Long instanceId, @RequestParam Long userId) {
+    public Result<?> cancel(@RequestParam String instanceId, @RequestParam Long userId) {
         flowInstanceService.cancelFlow(instanceId, userId);
         return Result.success();
     }
@@ -79,7 +79,7 @@ public class FlowInstanceController {
      * 终止流程
      */
     @PostMapping("/terminate")
-    public Result<?> terminate(@RequestParam Long instanceId, @RequestParam Long userId) {
+    public Result<?> terminate(@RequestParam String instanceId, @RequestParam Long userId) {
         flowInstanceService.terminateFlow(instanceId, userId);
         return Result.success();
     }
@@ -91,7 +91,7 @@ public class FlowInstanceController {
      * @return 通知结果
      */
     @PostMapping("/notify")
-    public Result<String> triggerNotify(@RequestParam Long instanceId, @RequestParam Long userId) {
+    public Result<String> triggerNotify(@RequestParam String instanceId, @RequestParam Long userId) {
         return Result.success(flowInstanceService.triggerNodeNotify(instanceId, userId));
     }
 
@@ -99,17 +99,17 @@ public class FlowInstanceController {
      * 获取角色+动态用户（role_dynamic_user）节点的候选用户列表
      * @param moduleCode 模块编码
      * @param roleIds 逗号分隔的角色ID
-     * @param tenantId 租户ID（可为null）
+     * @param tenantCode 租户编码（可为null）
      * @param sourceOrgId 发起机构ID（可为null）
      */
     @GetMapping("/roleDynamicUsers")
     public Result<List<Map<String, Object>>> getRoleDynamicUsers(
             @RequestParam String moduleCode,
             @RequestParam String roleIds,
-            @RequestParam(required = false) Long tenantId,
-            @RequestParam(required = false) Long sourceOrgId) {
+            @RequestParam(required = false) String tenantCode,
+            @RequestParam(required = false) String sourceOrgId) {
         return Result.success(
-                flowInstanceService.getRoleDynamicUsers(moduleCode, roleIds, tenantId, sourceOrgId));
+                flowInstanceService.getRoleDynamicUsers(moduleCode, roleIds, tenantCode, sourceOrgId));
     }
 
     /**
@@ -137,7 +137,7 @@ public class FlowInstanceController {
      * @return 回退结果描述
      */
     @PostMapping("/rollback")
-    public Result<String> rollbackFlow(@RequestParam Long instanceId, @RequestParam Long userId) {
+    public Result<String> rollbackFlow(@RequestParam String instanceId, @RequestParam Long userId) {
         String result = flowInstanceService.rollbackFlow(instanceId, userId);
         return Result.success(result);
     }
