@@ -412,7 +412,7 @@ public class SysUserServiceImpl implements SysUserService {
         }
 
         // 3. 优先从机构层级扁平化表查询 sourceOrgId -> 根路径
-        List<String> orgPathToRoot = getOrgPathToRootByFlattenTable(sourceOrgId);
+        List<String> orgPathToRoot = new ArrayList<>(getOrgPathToRootByFlattenTable(sourceOrgId));
 
         // 4. 兜底：扁平化表无数据时，按父级链路回溯
         if (orgPathToRoot.isEmpty()) {
