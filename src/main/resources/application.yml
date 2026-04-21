@@ -1,5 +1,5 @@
-server:
-  port: 8080
+﻿server:
+  port: 18080
   servlet:
     context-path: /api
 
@@ -17,7 +17,7 @@ spring:
   web:
     resources:
       static-locations: file:C:/Users/dwt/AppData/Local/uploadAttachment
-  # 文件上传配置
+  # 鏂囦欢涓婁紶閰嶇疆
   servlet:
     multipart:
       max-file-size: 10MB
@@ -35,22 +35,24 @@ mybatis-plus:
       logic-not-delete-value: 0
   mapper-locations: classpath*:mapper/**/*.xml
 
-# JWT配置
+# JWT閰嶇疆
 jwt:
   secret: right-manage-secret-key-2024
   expiration: 86400000
   header: Authorization
   token-prefix: Bearer
 
-# 日志配置
+# 鏃ュ織閰嶇疆
 logging:
   level:
     com.rightmanage: debug
     org.springframework.security: debug
 
-# 文件上传配置
+# 鏂囦欢涓婁紶閰嶇疆
 file:
   upload:
     path: C:/Users/dwt/AppData/Local/uploadAttachment
   access:
     prefix: /api/files
+
+
